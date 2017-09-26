@@ -1,0 +1,24 @@
+{
+    "name"        : "cartbeforehorse/cbh-model",
+    "description" : "Extending and combining all the best vendor extensions to Eloquent Models",
+    "keywords"    : ["laravel", "eloquent", "model", "validation", "dual-pk", "finite-state-machine", "fsm"],
+    "type"        : "library",
+    "license"     : "MIT",
+    "authors": [
+        {
+            "name": "Darwin Biler",
+            "email": "buonzz@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "5.2.*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Cartbeforehorse\\DbModels\\": "src/"
+        }
+    }
+}
