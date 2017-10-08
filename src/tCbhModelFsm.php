@@ -24,26 +24,30 @@ trait tCbhModelFsm {
         return $this -> _moStateMachine;
     }
 
-    public function stateIs() {
+    public function fsmStateIs() {
         return $this -> stateMachine() -> getState();
     }
-
-    public function fsmTransition ($transition) {
-        return $this -> stateMachine() -> apply ($transition);
+    public function fsmGetPossibleTransitions() {
+        return $this -> stateMachine() -> getPossibleTransitions();
     }
 
-    public function transitionAllowed ($transition) {
+    public function fsmTransitionAllowed ($transition) {
         return $this -> stateMachine() -> can ($transition);
+    }
+    public function fsmTransition ($transition, $soft =false) {
+        return $this -> stateMachine() -> apply ($transition, $soft);
+    }
+    public function fsmTransitionAndReturn ($transition) {
+        return $this -> stateMachine() -> apply ($transition, true);
     }
 
     /***
      *
-     *   This function auto-stamps a secondary table with a history of the states the SM was in.
-     *   Not part of the scope at the time of writing! (08/10/2017)
+     *  There are neat ways to log the history of FSM actions on an object. However
+     *  this does require us to set up a secondary table to log the states, and who
+     *  applied them.
+     *  However, this is not part of the scope at the time of writing! (08/10/2017)
      *
-     *public function history() {
-     *    return $this -> hasMany (self::HISTORY_MODEL['name']);
-     *}
      **/
 
 }
