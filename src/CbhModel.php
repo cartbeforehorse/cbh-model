@@ -25,7 +25,7 @@ class CbhModel extends Eloquent implements MessageProvider, iWatsonValidation {
      */
     use tWatsonValidation;
 
-    public    $incrementing   = false;    // why Eloquent would ever set to true is beyond me
+    public    $incrementing   = false;    // why Eloquent would ever set the default to true is beyond me
     protected $primaryKey     = [];       // CbhModel allows the extending class to define a string or an array of strings
     protected $tableAlias;                // allows us to alias a table, either explicitly or with the "as" keywork in $table
 
