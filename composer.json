@@ -4,16 +4,21 @@
     "keywords"    : ["laravel", "eloquent", "model", "validation", "dual-pk", "finite-state-machine", "fsm"],
     "type"        : "library",
     "license"     : "MIT",
+    "repositories" : [{
+        "type" : "vcs",
+        "url"  : "https://github.com/cartbeforehorse/cbh-validation" }
+    ],
     "authors": [
         {
-            "name": "Darwin Biler",
-            "email": "buonzz@gmail.com"
+            "name": "Osian ap Garth",
+            "email": "osian.ap.garth@gmail.com"
         }
     ],
     "require": {
         "php"                             : ">=7.0",
         "watson/validating"               : "^3.0",
-        "sebdesign/laravel-state-machine" : "^1.2"
+        "sebdesign/laravel-state-machine" : "^1.2",
+        "cartbeforehorse/cbh-validation"  : ">=0.0.1"
     },
     "require-dev": {
         "phpunit/phpunit" : "5.2.*"
