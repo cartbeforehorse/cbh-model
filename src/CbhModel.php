@@ -33,6 +33,7 @@ class CbhModel extends Eloquent implements MessageProvider, iWatsonValidation {
 
     // following variables need to be set to assist with user-searching capability
     // models need to declare each attribute as one of these types (default is string)
+    protected $viscols  = [];
     protected $dates    = [];
     protected $numerics = [];
     protected $strings  = [];
@@ -240,6 +241,9 @@ class CbhModel extends Eloquent implements MessageProvider, iWatsonValidation {
      */
     public function getMessageBag() {
         return $this->getErrors();
+    }
+    public function getVisibleColumns() {
+        return $this->viscols;
     }
     public function getUserSearch() {
         return $this->usr_srch;
