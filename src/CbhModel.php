@@ -4,6 +4,7 @@ namespace Cartbeforehorse\DbModels;
 
 use Cartbeforehorse\DbModels\sqlConditions\WhereCondition;
 use Cartbeforehorse\Validation\ValidationSys;
+use Cartbeforehorse\Validation\CodingError;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model as Eloquent;
 use Illuminate\Contracts\Support\MessageProvider;
@@ -42,8 +43,8 @@ class CbhModel extends Eloquent implements MessageProvider, iWatsonValidation {
     protected $usr_srch = [];
 
     // following variables required by WatsonValidation
-    protected $rules          = [];
-    protected $rulesets       = [];
+    protected $rules    = [];
+    protected $rulesets = [];
 
 
     public function __construct (array $attributes = []) {
@@ -133,14 +134,16 @@ class CbhModel extends Eloquent implements MessageProvider, iWatsonValidation {
         return $str;
     }
     protected function getColType ($col) {
-        if ( ValidationSys::InArray ($col, $this->dates) )
-            return 'date';
-        elseif ( ValidationSys::InArray ($col, $this->numerics) )
+        if ( ValidationSys::InArray ($this->casts[$col], ['integer','real','float','double']) )
             return 'number';
-        elseif ( ValidationSys::InArray ($col, $this->strings) )
+        elseif ( $this->casts[$col] == 'boolean' )
+            return 'boolean';
+        elseif ( ValidationSys::InArray ($this->casts[$col], ['date','datetime','timestamp']) )
+            return 'date';
+        elseif ( ValidationSys::InArray ($this->casts[$col], ['string']) )
             return 'string';
-        else
-            return 'string';
+        elseif ( ValidationSys::InArray ($this->casts[$col], ['object','array','collection']) )
+            CodingError::RaiseCodingError ("Unhandled Data Type [{$this->casts[$col]}] in " . __FUNCTION__);
     }
 
     public function scopeProcessUserSearch (Builder $builder, array $usr_srch_arr) {
