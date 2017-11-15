@@ -4,14 +4,24 @@ namespace Cartbeforehorse\DbModels;
 
 use Cartbeforehorse\Validation\ValidationSys;
 use Cartbeforehorse\Validation\CodingError;
+use Yajra\Oci8\Eloquent\OracleEloquent as YajraModel;
 use Yajra\Pdo\Oci8\Exceptions\Oci8Exception;
 use \DB;
 use \PDO;
 
-class CbhIfsModel extends CbhModel
-{
+class CbhIfsModel extends YajraModel {
 
-    protected $connection = 'oracle';
+    /***
+     * The trait of the CbhModel added here for validation and user-search purposes. We
+     * must also set extending variables in the class, since doing so in the trait will
+     * cause errors that PHP doesn't like.
+     */
+    use tCbhModel;
+
+    protected $connection     = 'oracle'; // duh
+    public    $incrementing   = false;    // why Eloquent would ever set the default to true is beyond me
+    protected $primaryKey     = [];       // CbhModel allows the extending class to define a string or an array of strings
+    public    $timestamps     = false;    // The Eloquent model assumes CREATED_AT, UPDATED_AT columns, which we want to kill
 
     /***
      * 99% of the time, the Application Owner (or app-owner) in IFS is simply given the
@@ -37,10 +47,6 @@ class CbhIfsModel extends CbhModel
      */
     protected $package;         // @str will be defined alongside the $table property
 
-    /***
-     * The Eloquent model assumes CREATED_AT, UPDATED_AT columns, which we want to kill
-     */
-    public $timestamps = false;
 
     /***
      * To understand the following arrays, you need to understand what Laravel means by
@@ -52,8 +58,8 @@ class CbhIfsModel extends CbhModel
      * I found this discussion more useful than the official documentation:
      *    >> http://stackoverflow.com/questions/22279435/what-does-mass-assignment-mean-in-laravel
      */
-    private $fillable = [];
-    private $guarded  = ['*'];   // these are protected by default
+    protected $fillable = [];
+    protected $guarded  = ['*'];   // these are protected by default
 
     //protected $colList = [];
     //protected $modifiableCols = [];
@@ -86,6 +92,10 @@ class CbhIfsModel extends CbhModel
     /*********************
      * Start logic here
      */
+    public function __construct (array $attributes = []) {
+        $this->_bootTrait();
+        parent::__construct ($attributes);
+    }
 
 
     /***
@@ -142,7 +152,6 @@ class CbhIfsModel extends CbhModel
          * $ctype = DB::connection($this->connection)->getDoctrineColumn($this->table,$colid)
          *              ->getType()->getName();
          */
-        $attr = '';
         foreach ($this->getDirty() as $colid => $colval) {
             $coltype = $this->getColType ($colid);
             switch ($coltype) {
@@ -162,9 +171,9 @@ class CbhIfsModel extends CbhModel
                     trigger_error("Invalid type: $datatype, cannot process these as strings!!", E_USER_ERROR);
                     break;
             }
-            $attr .= strtoupper($colid) . chr(31) . $colval . chr(30);
+            $attr = ($attr??'') . strtoupper($colid) . chr(31) . $colval . chr(30);
         }
-        return $attr; // an empty string will be returned if no columns are dirty
+        return $attr;
     }
 
     /*********************
@@ -191,7 +200,7 @@ class CbhIfsModel extends CbhModel
             session()->flash ('flash_message', 'Changes successfully saved to database');
             session()->flash ('alert_class', 'alert-success');
 
-        } cath (Oci8Exception e$) {
+        } catch (Oci8Exception $e) {
 
             return redirect()->back()->with ([
                 'error_stack'     => $e->getOciErrorStack(),
@@ -276,20 +285,26 @@ class CbhIfsModel extends CbhModel
 
     }
 
+    /*
+     *public function newQuery() {
+     *    return parent::newQuery()
+     *        -> addSelect ('objversion')
+     *        -> selectRaw ('rowidtochar(objid) as objid' );
+     *}
+     */
 
     /*********************
      * Scopes for fetching data from $table
      * I'm not sure if it's possible here to also fetch from $view on occasion?
      */
-    public function scopeGetAll($query)
-    {
-        $query -> select($this->selectCols) -> simplePaginate(20);
+    public function scopeGetAll($query) {
+        return $this -> buildSelectCols ($query) -> where ('supplier_id','291710') -> get();
     }
 
     public function scopeFetchByPk ($query, array $key_values)
     {
         $this->checkValuesArePk ($key_values);
-        $query = $query->select ($this->selectCols);
+        $query = $query->select (array_keys($this->casts));
         foreach ($this->primaryKey as $key_col) {
             $query = $query -> where ($key_col, $key_values[$key_col]);
         }
