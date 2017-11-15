@@ -61,9 +61,6 @@ class CbhIfsModel extends YajraModel {
     protected $fillable = [];
     protected $guarded  = ['*'];   // these are protected by default
 
-    //protected $colList = [];
-    //protected $modifiableCols = [];
-
     /***
      * It is useful to think of the Eloquent Model as being an object that represents a
      * single database record. However, we should also be aware that Eloquent was never
@@ -297,8 +294,8 @@ class CbhIfsModel extends YajraModel {
      * Scopes for fetching data from $table
      * I'm not sure if it's possible here to also fetch from $view on occasion?
      */
-    public function scopeGetAll($query) {
-        return $this -> buildSelectCols ($query) -> where ('supplier_id','291710') -> get();
+    public function scopeSelectAllColumns($query) {
+        return $this -> buildSelectCols ($query);
     }
 
     public function scopeFetchByPk ($query, array $key_values)
