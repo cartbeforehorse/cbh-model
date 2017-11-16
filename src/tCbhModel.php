@@ -6,9 +6,7 @@ use Cartbeforehorse\DbModels\sqlConditions\WhereCondition;
 use Cartbeforehorse\Validation\ValidationSys;
 use Cartbeforehorse\Validation\CodingError;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Contracts\Support\MessageProvider;
 use Watson\Validating\ValidatingTrait as tWatsonValidation;
-use Watson\Validating\ValidatingInterface as iWatsonValidation;
 
 /**
  *  CbhModel{}
@@ -189,6 +187,8 @@ trait tCbhModel {
 
     public function scopeProcessUserSearch (Builder $builder, array $usr_srch_arr) {
 
+        $builder = $this -> buildSelectCols ($builder);
+
         //
         // 1. Loop on each column to collect data that the user is really searching on
         // 2. Remove excessive ; and | characters
@@ -288,6 +288,9 @@ trait tCbhModel {
     }
     public function getUserSearch() {
         return $this->usr_srch;
+    }
+    public function getSelectCols() {
+        return $this->select_cols;
     }
 
     // setters

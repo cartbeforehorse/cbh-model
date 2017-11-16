@@ -294,10 +294,6 @@ class CbhIfsModel extends YajraModel {
      * Scopes for fetching data from $table
      * I'm not sure if it's possible here to also fetch from $view on occasion?
      */
-    public function scopeSelectAllColumns($query) {
-        return $this -> buildSelectCols ($query);
-    }
-
     public function scopeFetchByPk ($query, array $key_values)
     {
         $this->checkValuesArePk ($key_values);

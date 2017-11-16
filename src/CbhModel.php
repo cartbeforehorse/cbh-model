@@ -2,7 +2,9 @@
 
 namespace Cartbeforehorse\DbModels;
 
-use Illuminate\Database\Eloquent\Model as EloquentModel;
+use Illuminate\Contracts\Support\MessageProvider;
+use Illuminate\Database\Eloquent\Model    as EloquentModel;
+use Watson\Validating\ValidatingInterface as iWatsonValidation;
 
 /**
  *  CbhModel{}
