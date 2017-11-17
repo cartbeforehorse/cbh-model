@@ -73,6 +73,7 @@ trait tCbhModel {
             $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ?  "{$val[1]} as $colid" : $colid;
             if ( strpos($col_setup,'select|') !== false ) { $this->select_cols[] = $colid; }
             if ( strpos($col_setup,'ro|')     !== false ) { $this->readonly_cols[] = $colid; }
+            if ( strpos($col_setup,'pk|')     !== false ) { $this->primaryKey[] = $colid; }
         }
     }
 
@@ -133,15 +134,31 @@ trait tCbhModel {
      */
     protected function buildSelectCols ($builder) {
         foreach ($this->select_cols as $colid) {
-            if ($this->expressions[$colid] == $colid) {
-                $builder -> addSelect ($colid);
-            } else {
+            if ( preg_match ('/as [A-Za-z][A-Za-z0-9_]*$/', $this->expressions[$colid]) > 0 ) {
                 $builder -> selectRaw ($this->expressions[$colid]);
+            } else {
+                $builder -> addSelect ($colid);
             }
         }
         return $builder;
     }
 
+
+    /***
+     * Simple scopes
+     */
+    public function scopeFetchByPk ($builder, array $key_values)
+    {
+        // check that the given values are indeed Primary Key
+        ValidationSys::ArrayKeysEqual (array_flip($this->primaryKey), $key_values, true);
+
+        $builder = $this -> buildSelectCols ($builder);
+
+        foreach ($this->primaryKey as $key_col) {
+            $builder -> where ($key_col, $key_values[$key_col]);
+        }
+        return $builder;
+    }
 
     /*******
      * scopeProcessUserSearch()

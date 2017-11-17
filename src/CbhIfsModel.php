@@ -62,23 +62,6 @@ class CbhIfsModel extends YajraModel {
     protected $guarded  = ['*'];   // these are protected by default
 
     /***
-     * It is useful to think of the Eloquent Model as being an object that represents a
-     * single database record. However, we should also be aware that Eloquent was never
-     * designed to work seamlessly with IFS. By design, the Eloquent model was designed
-     * to write data directly back to the underlying source table.
-     * In order to comply with IFS's data-integrity model, we have to feed data back to
-     * the underlying tables through purpose-built PL/SQL stored procedures provided by
-     * IFS. These procedures inherently update two columns called OBJID and OBJVERSION,
-     * meaning that the same values held in Eloquent's $attributes array will be out of
-     * synch with IFS's after each INSERT or UPDATE command is executed. Therefore, our
-     * IfsModel{} instance must hold independent records of OBJID and OBJVERSION, which
-     * we will then bind to the API procedures we call in IFS.
-     * By storing these two values, we will always be able to access the underlying IFS
-     * record at any time.
-     */
-    //protected $objid_attr;
-    //protected $objver_attr;
-    /***
      * The $info string simply holds information provided as feedback from IFS, when we
      * attempt to manipulate data. It won't be used very often, but is worth keeping as
      * an object property for the odd occasion.
@@ -185,13 +168,11 @@ class CbhIfsModel extends YajraModel {
             $exe_string = "BEGIN {$this->appOwner}.{$this->package}.New__ (:info, :objid, :objver, :attr, :chkdo); END;";
             $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
-            $stmt->bindParam (':info',   $this->info,   PDO::PARAM_STR, 2000);
-            //$stmt->bindParam (':objid',  $this->objid_attr,  PDO::PARAM_STR, 200);
-            //$stmt->bindParam (':objver', $this->objver_attr, PDO::PARAM_STR, 200);
-            $stmt->bindParam (':objid',  $this->objid,  PDO::PARAM_STR, 200);
-            $stmt->bindParam (':objver', $this->objver, PDO::PARAM_STR, 200);
-            $stmt->bindParam (':attr',   $attr,         PDO::PARAM_STR, 2000);
-            $stmt->bindParam (':chkdo',  $chkdo,        PDO::PARAM_STR, 10);
+            $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
+            $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
+            $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
+            $stmt->bindParam (':attr',   $attr,                           PDO::PARAM_STR, 2000);
+            $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
             $stmt->execute();
 
             session()->flash ('flash_message', 'Changes successfully saved to database');
@@ -221,31 +202,21 @@ class CbhIfsModel extends YajraModel {
                 $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Modify__ (:info, :objid, :objver, :attr, :chkdo); END;";
                 $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
-                //$this->objid_attr  = $this->objid;
-                //$this->objver_attr = $this->objver;
-
-                $stmt->bindParam (':info',   $this->info,   PDO::PARAM_STR, 2000);
-                //$stmt->bindParam (':objid',  $this->objid_attr,  PDO::PARAM_STR, 200);
-                //$stmt->bindParam (':objver', $this->objver_attr, PDO::PARAM_STR, 200);
-                $stmt->bindParam (':objid',  $this->objid,  PDO::PARAM_STR, 200);
-                $stmt->bindParam (':objver', $this->objver, PDO::PARAM_STR, 200);
-                $stmt->bindParam (':attr',   $dirty_attr,   PDO::PARAM_STR, 2000);
-                $stmt->bindParam (':chkdo',  $chkdo,        PDO::PARAM_STR, 10);
+                $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
+                $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
+                $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
+                $stmt->bindParam (':attr',   $dirty_attr,                     PDO::PARAM_STR, 2000);
+                $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
                 $stmt->execute();
 
                 session()->flash ('flash_message', 'Changes successfully saved to database');
                 session()->flash ('alert_class', 'alert-success');
 
-                //$this->objid  = $this->objid_attr;
-                //$this->objver = $this->objver_attr;
-
             } catch (Oci8Exception $e) {
 
                 return redirect()->back()->with ([
-                    'error_stack'     => $e->getOciErrorStack(),
-                    'flash_message'   => $e->getOciErrorMsg(),
-                    'failing_db_call' => $e->getOriginalStatement(),
-                    'call_parameters' => $e->getBindings(),
+                    'error_stack'     => $e->getTrace(),
+                    'flash_message'   => $stmt->errorInfo()[2],
                     'alert_class'     => 'alert-danger',
                 ]);
 
@@ -259,10 +230,10 @@ class CbhIfsModel extends YajraModel {
             $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Remove__ (:info, :objid, :objver, :chkdo); END;";
             $stmt = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
-            $stmt->bindParam (':info',   $this->info,   PDO::PARAM_STR, 2000);
-            $stmt->bindParam (':objid',  $this->objid,  PDO::PARAM_STR, 200);
-            $stmt->bindParam (':objver', $this->objver, PDO::PARAM_STR, 200);
-            $stmt->bindParam (':chkdo',  $chkdo,        PDO::PARAM_STR, 10);
+            $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
+            $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
+            $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
+            $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
             $stmt->execute();
 
             session()->flash ('flash_message', 'Record successfully deleted in the database');
@@ -282,27 +253,11 @@ class CbhIfsModel extends YajraModel {
 
     }
 
-    /*
-     *public function newQuery() {
-     *    return parent::newQuery()
-     *        -> addSelect ('objversion')
-     *        -> selectRaw ('rowidtochar(objid) as objid' );
-     *}
-     */
 
     /*********************
      * Scopes for fetching data from $table
      * I'm not sure if it's possible here to also fetch from $view on occasion?
      */
-    public function scopeFetchByPk ($query, array $key_values)
-    {
-        $this->checkValuesArePk ($key_values);
-        $query = $query->select (array_keys($this->casts));
-        foreach ($this->primaryKey as $key_col) {
-            $query = $query -> where ($key_col, $key_values[$key_col]);
-        }
-        return $query;
-    }
     public function scopeFetchByObjid ($query, $objid, $objver) {
         return $query -> select ($this->viscols)
             -> where ('objid',      $objid)
@@ -313,12 +268,6 @@ class CbhIfsModel extends YajraModel {
      *********************/
 
 
-    /***
-     * Checking functions to verify that parameters are well formed
-     */
-    protected function checkValuesArePk ($given_array) {
-        ValidationSys::ArrayKeysEqual (array_flip($this->primaryKey), $given_array);
-    }
 
     /***
      * Setters and Getters
