@@ -162,8 +162,8 @@ class WhereCondition {
         } elseif ($this->condition == 'whereNotBetween') {
             return "!=$val0..$val1";
         } else {
-            // =, !=, >, >=, <, <=
-            return ($this->condition=='=') ? $val0 : $this->condition . $val0;
+            // like, =, !=, >, >=, <, <=
+            return ValidationSys::InArray($this->condition, ['=','like']) ? $val0 : $this->condition . $val0;
         }
     }
 
