@@ -24,8 +24,18 @@ trait tCbhModelFsm {
         return $this -> _moStateMachine;
     }
 
-    public function fsmStateIs() {
+    public function fsmGetState() {
         return $this -> stateMachine() -> getState();
+    }
+    public function fsmStateIs (string $check_state) {
+        return $this -> fsmGetState() == $check_state;
+    }
+    public function fsmStateIsIn (array $check_states) {
+        $is_state = false;
+        foreach ($check_states as $state) {
+            $is_state = $is_state || $this->fsmGetState() == $state;
+        }
+        return $is_state;
     }
     public function fsmGetPossibleTransitions() {
         return $this -> stateMachine() -> getPossibleTransitions();
