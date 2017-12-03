@@ -3,9 +3,11 @@
 namespace Cartbeforehorse\DbModels;
 
 use Cartbeforehorse\DbModels\sqlConditions\WhereCondition;
+use Cartbeforehorse\DbModels\Builders\CbhBuilder;
 use Cartbeforehorse\Validation\ValidationSys;
 use Cartbeforehorse\Validation\CodingError;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Expression as RawExpression;
 use Watson\Validating\ValidatingTrait as tWatsonValidation;
 
 /**
@@ -64,19 +66,41 @@ trait tCbhModel {
      * This is effectively the constructor that needs to be called from the Model
      */
     protected function _bootTrait() {
+
         if ( preg_match('/^\w+\s+as\s+(\w+)$/', $this->table, $out) ) {
             $this->tableAlias = $out[1];
         }
+
         foreach ($this->col_settings as $colid => $col_setup) {
+
             $col_setup = trim ($col_setup, '|') . '|';
+
+            if ( strpos($col_setup,'ro|') !== false ) {
+                $this->readonly_cols[] = $colid;
+            }
+            if ( strpos($col_setup,'pk|') !== false ) {
+                $this->primaryKey[] = $colid;
+            }
+            if ( strpos($col_setup,'select|') !== false ) {
+                $this->select_cols[] = $colid;
+            }
+            $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ?  new RawExpression("{$val[1]} as $colid") : $colid;
             $this->casts[$colid]       = preg_match('/type:([^\|]*)\|/',$col_setup,$val) ? $val[1] : 'string';
-            $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ?  "{$val[1]} as $colid" : $colid;
-            if ( strpos($col_setup,'select|') !== false ) { $this->select_cols[] = $colid; }
-            if ( strpos($col_setup,'ro|')     !== false ) { $this->readonly_cols[] = $colid; }
-            if ( strpos($col_setup,'pk|')     !== false ) { $this->primaryKey[] = $colid; }
+
         }
+
     }
 
+
+    /**
+     * Override the standard Builder with my version...
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @return \Cartbeforehorse\DbModels\Builders\CbhBuilder which extends \Illuminate\Database\Eloquent\Builder|static
+     */
+    public function newEloquentBuilder ($query)
+    {
+        return new CbhBuilder ($query, array_values($this->expressions));
+    }
 
     /******
      * setKeysForSaveQuery()
@@ -88,6 +112,16 @@ trait tCbhModel {
      *         https://stackoverflow.com/questions/36332005/laravel-model-with-two-primary-keys-update
      *         https://github.com/laravel/framework/issues/5355
      **/
+    public function getKeyName() {
+        if ( is_string($this->primaryKey) ) {
+            return $this->primaryKey;
+        } elseif ( is_array($this->primaryKey) && count($this->primaryKey)==1 ) {
+            return $this->primaryKey[0];
+        } else {
+            return $this->primaryKey;
+            //return '!!what do we do here??';
+        }
+    }
     protected function setKeysForSaveQuery (Builder $query) {
         $keys = $this->getKeyName();
         if (!is_array($keys)) {
@@ -126,24 +160,6 @@ trait tCbhModel {
     }
 
 
-    /*******
-     * buildSelectCols()
-     *     Does exactly what is says on the tin!  Using the properties declared in $col_settings of
-     *     the final Model class, we build our SELECT list of columns alternating between addSelect
-     *     and selectRaw() as appropriate.
-     */
-    protected function buildSelectCols ($builder) {
-        foreach ($this->select_cols as $colid) {
-            if ( preg_match ('/as [A-Za-z][A-Za-z0-9_]*$/', $this->expressions[$colid]) > 0 ) {
-                $builder -> selectRaw ($this->expressions[$colid]);
-            } else {
-                $builder -> addSelect ($colid);
-            }
-        }
-        return $builder;
-    }
-
-
     /***
      * Simple scopes
      */
@@ -152,12 +168,14 @@ trait tCbhModel {
         // check that the given values are indeed Primary Key
         ValidationSys::ArrayKeysEqual (array_flip($this->primaryKey), $key_values, true);
 
-        $builder = $this -> buildSelectCols ($builder);
-
         foreach ($this->primaryKey as $key_col) {
             $builder -> where ($key_col, $key_values[$key_col]);
         }
         return $builder;
+    }
+
+    public function scopeFindWithExpressionCols ($builder, $id) {
+        return parent::find ($id, array_values($this->expressions));
     }
 
     /*******
@@ -203,8 +221,6 @@ trait tCbhModel {
     }
 
     public function scopeProcessUserSearch (Builder $builder, array $usr_srch_arr) {
-
-        $builder = $this -> buildSelectCols ($builder);
 
         //
         // 1. Loop on each column to collect data that the user is really searching on
