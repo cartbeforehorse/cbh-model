@@ -181,15 +181,24 @@ class CbhIfsModel extends YajraModel {
     }
 
     /*********************
-     * Insert, Update and Remove data in IFS with the following functions
+     * ifsInsert()
+     * ifsUpdate()
+     * ifsDelete()
+     *     Insert, Update and Remove data into and from IFS, using the IFS API
+     *     functions coded into the Oracle tier, so that we avoid skipping the
+     *     IFS business logic.
+     *     Note that the calling function is responsible for catching whatever
+     *     Exception is thrown by the database-call.  The only exceptions that
+     *     we can foresee happening, will be due to the quality of data passed
+     *     to the $attr string, such that it violates the application business
+     *     logic of IFS.  An Oci8Exception{} object will be thrown by PHP when
+     *     anything go wrong when executing the database-code.
      */
     public function ifsInsert ($chkdo ='DO') {
 
         $this-> isValidOrFail();
 
-        try {
-
-            $attr       = $this->getDirtyAttr ('i');
+        if ( !empty($new_attr = $this->getDirtyAttr('i')) ) {
 
             $exe_string = "BEGIN {$this->appOwner}.{$this->package}.New__ (:info, :objid, :objver, :attr, :chkdo); END;";
             $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
@@ -197,86 +206,51 @@ class CbhIfsModel extends YajraModel {
             $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
             $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
             $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
-            $stmt->bindParam (':attr',   $attr,                           PDO::PARAM_STR, 2000);
+            $stmt->bindParam (':attr',   $new_attr,                       PDO::PARAM_STR, 2000);
             $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
             $stmt->execute();
 
             session()->flash ('flash_message', 'Changes successfully saved to database');
             session()->flash ('alert_class', 'alert-success');
 
-        } catch (Oci8Exception $e) {
-
-            dd ($e);
-            return redirect()->back()->with ([
-                'error_stack'     => $e->getOciErrorStack(),
-                'flash_message'   => $e->getOciErrorMsg(),
-                'failing_db_call' => $e->getOriginalStatement(),
-                'call_parameters' => $e->getBindings(),
-                'alert_class'     => 'alert-danger',
-            ]);
-
         }
-
     }
 
     public function ifsUpdate ($chkdo ='DO') {
 
         $this-> isValidOrFail();
 
-        if (!empty($dirty_attr = $this->getDirtyAttr('u'))) {
+        if ( !empty($dirty_attr = $this->getDirtyAttr('u')) ) {
 
-            try {
-                $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Modify__ (:info, :objid, :objver, :attr, :chkdo); END;";
-                $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
+            $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Modify__ (:info, :objid, :objver, :attr, :chkdo); END;";
+            $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
-                $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
-                $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
-                $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
-                $stmt->bindParam (':attr',   $dirty_attr,                     PDO::PARAM_STR, 2000);
-                $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
-                $stmt->execute();
+            $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
+            $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
+            $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
+            $stmt->bindParam (':attr',   $dirty_attr,                     PDO::PARAM_STR, 2000);
+            $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
+            $stmt->execute();
 
-                session()->flash ('flash_message', 'Changes successfully saved to database');
-                session()->flash ('alert_class', 'alert-success');
+            session()->flash ('flash_message', 'Changes successfully saved to database');
+            session()->flash ('alert_class', 'alert-success');
 
-            } catch (Oci8Exception $e) {
-
-                return redirect()->back()->with ([
-                    'error_stack'     => $e->getTrace(),
-                    'flash_message'   => $stmt->errorInfo()[2],
-                    'alert_class'     => 'alert-danger',
-                ]);
-
-            }
         }
     }
 
     public function ifsDelete ($chkdo ='DO') {
 
-        try {
-            $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Remove__ (:info, :objid, :objver, :chkdo); END;";
-            $stmt = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
+        $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Remove__ (:info, :objid, :objver, :chkdo); END;";
+        $stmt = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
-            $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
-            $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
-            $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
-            $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
-            $stmt->execute();
+        $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
+        $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
+        $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
+        $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
+        $stmt->execute();
 
-            session()->flash ('flash_message', 'Record successfully deleted in the database');
-            session()->flash ('alert_class', 'alert-success');
-
-        } catch (Oci8Exception $e) {
-
-            return redirect()->back()->with ([
-                'error_stack'     => $e->getOciErrorStack(),
-                'flash_message'   => $e->getOciErrorMsg(),
-                'failing_db_call' => $e->getOriginalStatement(),
-                'call_parameters' => $e->getBindings(),
-                'alert_class'     => 'alert-danger',
-            ]);
-
-        }
+        session()->flash ('flash_message', 'Record successfully deleted in the database');
+        session()->flash ('alert_class', 'alert-success');
 
     }
 
