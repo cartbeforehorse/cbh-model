@@ -6,8 +6,11 @@
     "license"     : "MIT",
     "repositories" : [{
         "type" : "vcs",
-        "url"  : "https://github.com/cartbeforehorse/cbh-validation" }
-    ],
+        "url"  : "https://github.com/cartbeforehorse/cbh-validation"
+    }, {
+        "type" : "vcs",
+        "url"  : "https://github.com/cartbeforehorse/laravel-oci8"
+    }],
     "authors": [
         {
             "name": "Osian ap Garth",
@@ -19,7 +22,7 @@
         "watson/validating"               : "^3.0",
         "sebdesign/laravel-state-machine" : "^1.2",
         "cartbeforehorse/cbh-validation"  : ">=0.0.1",
-        "yajra/laravel-oci8": "5.5.*"
+        "cartbeforehorse/laravel-oci8"    : "5.5.*"
     },
     "require-dev": {
         "phpunit/phpunit" : "5.2.*"

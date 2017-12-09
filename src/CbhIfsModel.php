@@ -49,17 +49,13 @@ class CbhIfsModel extends YajraModel {
 
 
     /***
-     * To understand the following arrays, you need to understand what Laravel means by
-     * 'mass-assignment'. To cut a long story short, mass-assignment is a dumb-ass idea
-     * since it encourages developers to inject HTML form-data directly into underlying
-     * database tables in one fell swoop. Such actions should not be allowed, and so we
-     * protect against it by guarding all columns of the model.
-     *    >> https://laravel.com/docs/5.4/eloquent#inserting-and-updating-models
-     * I found this discussion more useful than the official documentation:
-     *    >> http://stackoverflow.com/questions/22279435/what-does-mass-assignment-mean-in-laravel
+     * These arrays respond to IFS's model of setting columns insertalbe and modifiable
+     * and I hope that you find them to be appropriately named.  We make use of them in
+     * the ifsInsert() and ifsUpdate() functions below.
      */
-    protected $fillable = [];
-    protected $guarded  = ['*'];   // these are protected by default
+    protected $insertable_cols = [];
+    protected $updatable_cols  = [];
+
 
     /***
      * The $info string simply holds information provided as feedback from IFS, when we
@@ -73,7 +69,21 @@ class CbhIfsModel extends YajraModel {
      * Start logic here
      */
     public function __construct (array $attributes = []) {
+
         $this->_bootTrait();
+
+        foreach ($this->col_settings as $colid => $col_setup) {
+
+            $col_setup = trim ($col_setup, '|') . '|';
+            if ( strpos($col_setup,'i|') !== false ) {
+                $this->insertable_cols[] = $colid;
+            }
+            if ( strpos($col_setup,'u|') !== false ) {
+                $this->updatable_cols[] = $colid;
+            }
+
+        }
+
         parent::__construct ($attributes);
     }
 
@@ -125,14 +135,22 @@ class CbhIfsModel extends YajraModel {
     /*********************
      * Functions to support the IFS Insert/Update/Delete processes
      */
-    protected function getDirtyAttr() {
+    protected function getDirtyAttr ($action ='x') {
+
+        if ($action == 'x') {
+            $attr_array   = $this->getDirty();
+        } else {
+            $filter_array = ($action=='i') ? array_flip($this->insertable_cols) : array_flip($this->updatable_cols);
+            $attr_array   = array_intersect_key ($this->getDirty(), $filter_array);
+        }
+
         /*
          * If required, we can find the database column-type here:
          *    http://stackoverflow.com/questions/18562684/how-to-get-database-field-type-in-laravel
          * $ctype = DB::connection($this->connection)->getDoctrineColumn($this->table,$colid)
          *              ->getType()->getName();
          */
-        foreach ($this->getDirty() as $colid => $colval) {
+        foreach ($attr_array as $colid => $colval) {
             $coltype = $this->getColType ($colid);
             switch ($coltype) {
                 case 'number':
@@ -141,8 +159,14 @@ class CbhIfsModel extends YajraModel {
                 case 'string':
                     $val = $colval;
                     break;
-                case 'date': // assume here that the PHP type is Carbon\Carbon
-                    $val = $colval->format('Y-m-d-H.i.s');  // defined in IFS CLIENT_SYS: date_format_ := 'YYYY-MM-DD-HH24.MI.SS';
+                case 'date':
+                    // Date format defined in IFS CLIENT_SYS: 'YYYY-MM-DD-HH24.MI.SS';
+                    // Consider that $colval might be string, or Carbon\Carbon
+                    if (gettype($colval) == 'string') {
+                        $val = strtr ($colval, ' :', '-.');
+                    } else {
+                        $val = $colval->format('Y-m-d-H.i.s');
+                    }
                     break;
                 case 'boolean':
                     $val = $colval ? 'true' : 'false';
@@ -151,7 +175,7 @@ class CbhIfsModel extends YajraModel {
                     trigger_error("Invalid type: $datatype, cannot process these as strings!!", E_USER_ERROR);
                     break;
             }
-            $attr = ($attr??'') . strtoupper($colid) . chr(31) . $colval . chr(30);
+            $attr = ($attr??'') . strtoupper($colid) . chr(31) . $val . chr(30);
         }
         return $attr;
     }
@@ -164,7 +188,9 @@ class CbhIfsModel extends YajraModel {
         $this-> isValidOrFail();
 
         try {
-            $attr       = $this->getDirtyAttr();
+
+            $attr       = $this->getDirtyAttr ('i');
+
             $exe_string = "BEGIN {$this->appOwner}.{$this->package}.New__ (:info, :objid, :objver, :attr, :chkdo); END;";
             $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
@@ -180,6 +206,7 @@ class CbhIfsModel extends YajraModel {
 
         } catch (Oci8Exception $e) {
 
+            dd ($e);
             return redirect()->back()->with ([
                 'error_stack'     => $e->getOciErrorStack(),
                 'flash_message'   => $e->getOciErrorMsg(),
@@ -196,7 +223,7 @@ class CbhIfsModel extends YajraModel {
 
         $this-> isValidOrFail();
 
-        if (!empty($dirty_attr = $this->getDirtyAttr())) {
+        if (!empty($dirty_attr = $this->getDirtyAttr('u'))) {
 
             try {
                 $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Modify__ (:info, :objid, :objver, :attr, :chkdo); END;";
@@ -276,8 +303,12 @@ class CbhIfsModel extends YajraModel {
     /***
      * Additional support functions
      */
-    public function getPrintableAttribute ($attr) {
-        return strtr($attr,chr(31).chr(30),'|#');
+    public function getPrintableAttribute ($attr =null) {
+        $attr = $attr ?? $this->getDirtyAttr();
+        return strtr ($attr, chr(31).chr(30), '#|');
+    }
+    public function getInfo() {
+        return $this->info;
     }
 
 }

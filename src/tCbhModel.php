@@ -27,10 +27,6 @@ trait tCbhModel {
      */
     use tWatsonValidation;
 
-    /***
-     * @str We may alias the table either explicitly or with the "as" keyword in $table
-     */
-    protected $tableAlias;
 
     // A new array called "col_settings" is defined here.  It is (ahem) the only option
     // that needs to be set in the Model definition file, and during _construct()ion it
@@ -40,7 +36,7 @@ trait tCbhModel {
     // The $col_settings array is built to have the column-name serve as the index, and
     // a string of configurable settings serve in the value.  The string may consist of
     // the following, separated by pipes:
-    //    type:x   x being of the types: string, integer, real, float, double,
+    //    type:x   x being of the types: string, integer, real, float, double, boolean
     //             date, datetime, timestamp, object, array, collection, json
     //    select   The column should be included in the SELECT statement by default
     //    ro       The column is read-only, preventing update via update function
@@ -49,7 +45,6 @@ trait tCbhModel {
     //
     protected $col_settings  = [];
     protected $select_cols   = [];
-    protected $readonly_cols = [];
     protected $expressions   = [];
     protected $casts         = [];
 
@@ -75,9 +70,6 @@ trait tCbhModel {
 
             $col_setup = trim ($col_setup, '|') . '|';
 
-            if ( strpos($col_setup,'ro|') !== false ) {
-                $this->readonly_cols[] = $colid;
-            }
             if ( strpos($col_setup,'pk|') !== false ) {
                 $this->primaryKey[] = $colid;
             }
