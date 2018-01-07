@@ -63,6 +63,12 @@ class CbhIfsModel extends YajraModel {
      * an object property for the odd occasion.
      */
     protected $info;
+    /***
+     * The $attr string holds the last attribute string passed to an IFS function.  The
+     * IFS API functions may modify during execution of ifsInsert() and ifsUpdate(), so
+     * what we put it may not necessarily be the same as what we get out.
+     */
+    protected $attr;
 
 
     /*********************
@@ -107,33 +113,14 @@ class CbhIfsModel extends YajraModel {
     }
 
 
-    /********************
-     * You may have noticed that I had a bit of a rant in the section above in regard to
-     * how the $fillable array works. This is where I go back on myself somewhat! :-/
-     * recUpdate() does almost the same as a mass-update, taking as an argument an array
-     * which matches the column names of the model. Of course, the input array has still
-     * most likely originated from an end-user's HTML form, but in order to make the app
-     * interactive, there's no real way to get around that. Anyway, the IfsModel{} class
-     * doesn't do a direct update on the underlying table, and because we bind variables
-     * to the IFS wrapper functions instead of doing direct table updates, the risk from
-     * SQL injection attack is significantly reduced.
-     * Data from the input array is filtered through mutators before being passed to the
-     * database, giving us a final opportunity to correct it before we finally reach the
-     * point of no return:
-     *   >> https://laravel.com/docs/5.4/eloquent-mutators#defining-a-mutator
-     */
-    /*
-     *public function recUpdate (array $new_rec_data) {
-     *    $upd_array = array_intersect_key ($new_rec_data, array_flip($this->modifiableCols));
-     *    foreach ($upd_array as $col => $new_val)
-     *        $this->$col = $new_val;
-     *    return $this;
-     *}
+    /********
+     * Supporting functions for ifsInsert/ifsUpdate/ifsDelete
      */
 
-
-    /*********************
-     * Functions to support the IFS Insert/Update/Delete processes
+    /**
+     * getDirty()
+     *     A function to support the IFS Insert/Update/Delete processes
+     *     @param $action valid values: x|i|u
      */
     protected function getDirtyAttr ($action ='x') {
 
@@ -172,12 +159,26 @@ class CbhIfsModel extends YajraModel {
                     $val = $colval ? 'true' : 'false';
                     break;
                 default:
-                    trigger_error("Invalid type: $datatype, cannot process these as strings!!", E_USER_ERROR);
+                    CodingError::RaiseCodingError ("Invalid type: $coltype, cannot process these as strings!!", E_USER_ERROR);
                     break;
             }
             $attr = ($attr??'') . strtoupper($colid) . chr(31) . $val . chr(30);
         }
-        return $attr;
+        return $attr ?? '';
+    }
+    /**
+     * updateModelAttributes()
+     *     If $attr has been changed by ifsInsert()/ifsUpdate() then we should
+     *     write the data back to the Model to keep the two in sych.
+     */
+    protected function updateModelAttributes ($chkdo) {
+        foreach ( array_filter (explode (chr(30),$this->attr)) as $value_pair) {
+            list ($key, $val) = explode (chr(31), $value_pair);
+            $this->attributes[strtolower($key)] = $val;
+        }
+        if ($chkdo == 'DO') {
+            $this->original = $this->attributes;
+        }
     }
 
     /*********************
@@ -194,11 +195,12 @@ class CbhIfsModel extends YajraModel {
      *     logic of IFS.  An Oci8Exception{} object will be thrown by PHP when
      *     anything go wrong when executing the database-code.
      */
-    public function ifsInsert ($chkdo ='DO') {
+    public function ifsInsert ($chkdo ='DO', $update_attr =true) {
 
-        $this-> isValidOrFail();
+        $this->isValidOrFail();
+        $this->attr = $this->getDirtyAttr('i');
 
-        if ( !empty($new_attr = $this->getDirtyAttr('i')) ) {
+        if ( $chkdo=='PREPARE' || !empty($this->attr) ) {
 
             $exe_string = "BEGIN {$this->appOwner}.{$this->package}.New__ (:info, :objid, :objver, :attr, :chkdo); END;";
             $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
@@ -206,9 +208,13 @@ class CbhIfsModel extends YajraModel {
             $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
             $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
             $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
-            $stmt->bindParam (':attr',   $new_attr,                       PDO::PARAM_STR, 2000);
+            $stmt->bindParam (':attr',   $this->attr,                     PDO::PARAM_STR, 2000);
             $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
             $stmt->execute();
+
+            if ($update_attr) {
+                $this->updateModelAttributes ($chkdo);
+            }
 
             session()->flash ('flash_message', 'Changes successfully saved to database');
             session()->flash ('alert_class', 'alert-success');
@@ -216,11 +222,11 @@ class CbhIfsModel extends YajraModel {
         }
     }
 
-    public function ifsUpdate ($chkdo ='DO') {
+    public function ifsUpdate ($chkdo ='DO', $update_attr =true) {
 
         $this-> isValidOrFail();
 
-        if ( !empty($dirty_attr = $this->getDirtyAttr('u')) ) {
+        if ( !empty($this->attr = $this->getDirtyAttr('u')) ) {
 
             $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Modify__ (:info, :objid, :objver, :attr, :chkdo); END;";
             $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
@@ -228,9 +234,13 @@ class CbhIfsModel extends YajraModel {
             $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
             $stmt->bindParam (':objid',  $this->attributes['objid'],      PDO::PARAM_STR, 200);
             $stmt->bindParam (':objver', $this->attributes['objversion'], PDO::PARAM_STR, 200);
-            $stmt->bindParam (':attr',   $dirty_attr,                     PDO::PARAM_STR, 2000);
+            $stmt->bindParam (':attr',   $this->attr,                     PDO::PARAM_STR, 2000);
             $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
             $stmt->execute();
+
+            if ($update_attr) {
+                $this->updateModelAttributes ($chkdo);
+            }
 
             session()->flash ('flash_message', 'Changes successfully saved to database');
             session()->flash ('alert_class', 'alert-success');
@@ -269,20 +279,47 @@ class CbhIfsModel extends YajraModel {
      *********************/
 
 
-
     /***
      * Setters and Getters
      */
-
-    /***
-     * Additional support functions
-     */
     public function getPrintableAttribute ($attr =null) {
-        $attr = $attr ?? $this->getDirtyAttr();
+        $attr = $attr ?? $this->attr ?? '';
         return strtr ($attr, chr(31).chr(30), '#|');
+    }
+    public function getAttrAsArray ($attr =null) {
+        $attr = $attr ?? $this->attr ?? '';
+        $attr = trim ($attr, chr(31).chr(30));
+        foreach ( array_filter (explode (chr(30), $attr)) as $value_pair) {
+            list ($key, $val) = explode (chr(31), $value_pair);
+            $ret[$key] = $val;
+        }
+        return $ret ?? [];
     }
     public function getInfo() {
         return $this->info;
+    }
+    public function getAttr() {
+        return $this->attr;
+    }
+
+    /***
+     * Additional support functions to manage the $attr string
+     */
+    public function generateNewAttr ($action ='x') {
+        return $this->getDirtyAttr ($action);
+    }
+    public function getAttrValue ($attr_key, $attr =null) {
+
+        $attr = $attr ?? $this->attr ?? '';
+
+        if ( $attr == '' ) {
+            return '';
+        }
+
+        $r = chr(30);
+        $v = chr(31);
+        preg_match ("/{$r}{$attr_key}{$v}([^{$r}]*){$r}/", $r.$attr, $matches);
+        return $matches[1];
     }
 
 }

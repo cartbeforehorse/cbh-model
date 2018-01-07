@@ -27,6 +27,8 @@ trait tCbhModel {
      */
     use tWatsonValidation;
 
+    protected $table;       // overriding that of the Eloquent model
+    protected $tableAlias;  // allows us to alias a table, either explicitly or with the "as" keywork in $table
 
     // A new array called "col_settings" is defined here.  It is (ahem) the only option
     // that needs to be set in the Model definition file, and during _construct()ion it
@@ -200,16 +202,25 @@ trait tCbhModel {
         return $str;
     }
     protected function getColType ($col) {
-        if ( ValidationSys::InArray ($this->casts[$col], ['integer','real','float','double']) )
-            return 'number';
-        elseif ( $this->casts[$col] == 'boolean' )
-            return 'boolean';
-        elseif ( ValidationSys::InArray ($this->casts[$col], ['date','datetime','timestamp']) )
-            return 'date';
-        elseif ( ValidationSys::InArray ($this->casts[$col], ['string']) )
-            return 'string';
-        elseif ( ValidationSys::InArray ($this->casts[$col], ['object','array','collection']) )
-            CodingError::RaiseCodingError ("Unhandled Data Type [{$this->casts[$col]}] in " . __FUNCTION__);
+        if ( !isset($this->casts[$col]) ) {
+            CodingError::RaiseCodingError ("Column '$col' needs to be defined in casts array in " . get_class($this));
+        } else {
+            if ( ValidationSys::InArray ($this->casts[$col], ['integer','real','float','double']) )
+                return 'number';
+            elseif ( $this->casts[$col] == 'boolean' )
+                return 'boolean';
+            elseif ( ValidationSys::InArray ($this->casts[$col], ['date','datetime','timestamp']) )
+                return 'date';
+            elseif ( ValidationSys::InArray ($this->casts[$col], ['string']) )
+                return 'string';
+            elseif ( ValidationSys::InArray ($this->casts[$col], ['object','array','collection']) )
+                CodingError::RaiseCodingError ("Data Type [{$this->casts[$col]}] not managed in " . __METHOD__);
+            else
+                CodingError::RaiseCodingError (
+                    "Unknown Type [{$this->casts[$col]}] on column $col, object " . get_class($this) . ", in " . __METHOD__ .
+                    "  Valid types are [integer, real, float, double, boolean, date, datetime, timestamp, string]"
+                );
+        }
     }
 
     public function scopeProcessUserSearch (Builder $builder, array $usr_srch_arr) {
