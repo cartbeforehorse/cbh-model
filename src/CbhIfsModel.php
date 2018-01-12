@@ -151,6 +151,8 @@ class CbhIfsModel extends YajraModel {
                     // Consider that $colval might be string, or Carbon\Carbon
                     if (gettype($colval) == 'string') {
                         $val = strtr ($colval, ' :', '-.');
+                    } elseif (gettype($colval) == 'NULL') {
+                        $val = '';
                     } else {
                         $val = $colval->format('Y-m-d-H.i.s');
                     }
