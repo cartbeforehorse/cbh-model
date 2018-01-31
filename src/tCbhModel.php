@@ -169,6 +169,7 @@ trait tCbhModel {
     }
 
     public function scopeFindWithExpressionCols ($builder, $id) {
+        // parameter 2 is effectively your SELECT list
         return parent::find ($id, array_values($this->expressions));
     }
 

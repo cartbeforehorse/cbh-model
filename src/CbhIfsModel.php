@@ -30,7 +30,7 @@ class CbhIfsModel extends YajraModel {
      * to allow the IFS app-owner's name to change. Defined as private since this value
      * should never be allowed to change once set.
      */
-    private $appOwner   = 'ifsapp';
+    private $appowner   = 'ifsapp';
 
     /***
      * Note that in the IFS context, the $table value will normally refer to a database
@@ -46,6 +46,7 @@ class CbhIfsModel extends YajraModel {
      * important that it warants its own property in the IFS Model.
      */
     protected $package;         // @str will be defined alongside the $table property
+    protected $cf_package;      // @str to deal with IFS Custom Field updates
 
 
     /***
@@ -66,9 +67,16 @@ class CbhIfsModel extends YajraModel {
     /***
      * The $attr string holds the last attribute string passed to an IFS function.  The
      * IFS API functions may modify during execution of ifsInsert() and ifsUpdate(), so
-     * what we put it may not necessarily be the same as what we get out.
+     * what we put in may not necessarily be the same as what we get out.
+     * $cf_attr is used for Custom Fields.  The class is designed to make the interface
+     * with Custom Fields as transparent as possible to the programmer.  By identifying
+     * custom fields with a cf__ prefix (instead of cf$_ as is the IFS standard), it is
+     * possible to insert and update Custom Fields as normal properties on the standard
+     * CbhIfsModel{} class.  There is no need to create a secondary Model to manage the
+     * CFT Custom Table.  This class is a one-stop-shop!
      */
     protected $attr;
+    protected $cf_attr;
 
 
     /*********************
@@ -80,6 +88,9 @@ class CbhIfsModel extends YajraModel {
 
         foreach ($this->col_settings as $colid => $col_setup) {
 
+            $this->cf_package = substr ($this->package, 0, -3) . 'CFP';
+
+            // me's thinking that this code should be moved to the parent constructor
             $col_setup = trim ($col_setup, '|') . '|';
             if ( strpos($col_setup,'i|') !== false ) {
                 $this->insertable_cols[] = $colid;
@@ -131,20 +142,17 @@ class CbhIfsModel extends YajraModel {
             $attr_array   = array_intersect_key ($this->getDirty(), $filter_array);
         }
 
-        /*
-         * If required, we can find the database column-type here:
-         *    http://stackoverflow.com/questions/18562684/how-to-get-database-field-type-in-laravel
-         * $ctype = DB::connection($this->connection)->getDoctrineColumn($this->table,$colid)
-         *              ->getType()->getName();
-         */
         foreach ($attr_array as $colid => $colval) {
+
             $coltype = $this->getColType ($colid);
+            $upcolid = strtoupper ($colid);
+
             switch ($coltype) {
                 case 'number':
-                    $val = "$colval";
+                    $val = $colval;
                     break;
                 case 'string':
-                    $val = $colval;
+                    $val = "$colval";
                     break;
                 case 'date':
                     // Date format defined in IFS CLIENT_SYS: 'YYYY-MM-DD-HH24.MI.SS';
@@ -164,10 +172,20 @@ class CbhIfsModel extends YajraModel {
                     CodingError::RaiseCodingError ("Invalid type: $coltype, cannot process these as strings!!", E_USER_ERROR);
                     break;
             }
-            $attr = ($attr??'') . strtoupper($colid) . chr(31) . $val . chr(30);
-        }
-        return $attr ?? '';
+
+            if ( substr($colid,0,4) == 'cf__' ) {
+                $cf_attr = ($cf_attr??'') . 'CF$_'.substr($upcolid,4) . chr(31) . $val . chr(30);
+            } else {
+                $attr = ($attr??'') . $upcolid . chr(31) . $val . chr(30);
+            }
+        }//end foreach
+
+        $this->attr    = $attr    ?? '';
+        $this->cf_attr = $cf_attr ?? '';
+        return ['attr' => $this->attr, 'cf_attr' => $this->cf_attr ];
+
     }
+
     /**
      * updateModelAttributes()
      *     If $attr has been changed by ifsInsert()/ifsUpdate() then we should
@@ -182,6 +200,7 @@ class CbhIfsModel extends YajraModel {
             $this->original = $this->attributes;
         }
     }
+
 
     /*********************
      * ifsInsert()
@@ -200,11 +219,11 @@ class CbhIfsModel extends YajraModel {
     public function ifsInsert ($chkdo ='DO', $update_attr =true) {
 
         $this->isValidOrFail();
-        $this->attr = $this->getDirtyAttr('i');
+        $this->getDirtyAttr('i');
 
         if ( $chkdo=='PREPARE' || !empty($this->attr) ) {
 
-            $exe_string = "BEGIN {$this->appOwner}.{$this->package}.New__ (:info, :objid, :objver, :attr, :chkdo); END;";
+            $exe_string = "BEGIN {$this->appowner}.{$this->package}.New__ (:info, :objid, :objver, :attr, :chkdo); END;";
             $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
             $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
@@ -213,6 +232,17 @@ class CbhIfsModel extends YajraModel {
             $stmt->bindParam (':attr',   $this->attr,                     PDO::PARAM_STR, 2000);
             $stmt->bindParam (':chkdo',  $chkdo,                          PDO::PARAM_STR, 10);
             $stmt->execute();
+
+            if ( $this->cf_attr != '' ) {
+                $exe_string = "BEGIN {$this->appowner}.{$this->cf_package}.Cf_New__ (:info, :objid, :cf_attr, '', :chkdo); END;";
+                $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
+
+                $stmt->bindParam (':info',    $this->info,                PDO::PARAM_STR, 2000);
+                $stmt->bindParam (':objid',   $this->attributes['objid'], PDO::PARAM_STR, 200);
+                $stmt->bindParam (':cf_attr', $this->cf_attr,             PDO::PARAM_STR, 200);
+                $stmt->bindParam (':chkdo',   $chkdo,                     PDO::PARAM_STR, 10);
+                $stmt->execute();
+            }
 
             if ($update_attr) {
                 $this->updateModelAttributes ($chkdo);
@@ -228,9 +258,9 @@ class CbhIfsModel extends YajraModel {
 
         $this-> isValidOrFail();
 
-        if ( !empty($this->attr = $this->getDirtyAttr('u')) ) {
+        if ( !empty($this->getDirtyAttr('u')) ) {
 
-            $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Modify__ (:info, :objid, :objver, :attr, :chkdo); END;";
+            $exe_string = "BEGIN {$this->appowner}.{$this->package}.Modify__ (:info, :objid, :objver, :attr, :chkdo); END;";
             $stmt       = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
             $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
@@ -252,7 +282,7 @@ class CbhIfsModel extends YajraModel {
 
     public function ifsDelete ($chkdo ='DO') {
 
-        $exe_string = "BEGIN {$this->appOwner}.{$this->package}.Remove__ (:info, :objid, :objver, :chkdo); END;";
+        $exe_string = "BEGIN {$this->appowner}.{$this->package}.Remove__ (:info, :objid, :objver, :chkdo); END;";
         $stmt = DB::connection($this->connection)->getPdo()->prepare ($exe_string);
 
         $stmt->bindParam (':info',   $this->info,                     PDO::PARAM_STR, 2000);
