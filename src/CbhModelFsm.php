@@ -20,8 +20,21 @@ class CbhModelFsm extends CbhModel implements MessageProvider, iWatsonValidation
      */
     use tCbhModelFsm;
 
-    /*
-     * And that's it folks!
-     ***/
+    /***
+     * Constructor to help us with the FsmGraph
+     */
+    public function __construct (array $attributes = []) {
+
+        parent::__construct ($attributes);
+
+        if ( !isset ($this->_mFsmGraph['property_path']) ) {
+            $this->_mFsmGraph['property_path'] = 'fsmstate';
+        }
+
+        if ( !isset ($this->_mFsmGraph['states']) ) {
+            $this->_mFsmGraph['states'] = explode (',', substr($this->rules['fsmstate'],3));
+        }
+
+    }
 
 }
