@@ -22,4 +22,20 @@ class CbhBuilder extends EloquentBuilder {
         }
     }
 
+    /**
+     * Override the get function to return only colums in $this->query->columns
+     *
+     * @param  array  $columns
+     * @return \Illuminate\Database\Eloquent\Collection|static[]
+     */
+    public function get($columns =[]) {
+        if ( !empty($columns) ) {
+            return parent::get($columns);
+        } elseif ( isset($this->query->columns) ) {
+            return parent::get ($this->query->columns);
+        } else {
+            return parent::get();
+        }
+    }
+
 }

@@ -47,6 +47,7 @@ trait tCbhModel {
     //
     protected $col_settings  = [];
     protected $select_cols   = [];
+    protected $visible_cols  = [];
     protected $expressions   = [];
     protected $casts         = [];
 
@@ -78,6 +79,9 @@ trait tCbhModel {
             if ( strpos($col_setup,'select|') !== false ) {
                 $this->select_cols[] = $colid;
             }
+            if ( strpos($col_setup,'vis|') !== false ) {
+                $this->visible_cols[] = $colid;
+            }
             $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ?  new RawExpression("{$val[1]} as $colid") : $colid;
             $this->casts[$colid]       = preg_match('/type:([^\|]*)\|/',$col_setup,$val) ? $val[1] : 'string';
 
@@ -93,7 +97,7 @@ trait tCbhModel {
      */
     public function newEloquentBuilder ($query)
     {
-        return new CbhBuilder ($query, array_values($this->expressions));
+        return new CbhBuilder ($query, array_values(array_intersect_key($this->expressions, array_flip($this->select_cols))) );
     }
 
     /******

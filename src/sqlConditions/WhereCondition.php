@@ -53,7 +53,7 @@ class WhereCondition {
         elseif ( in_array ($query_values_arr[0], ['!','%']) ) {
             $this->condition = $query_values_arr[0]=='%' ? 'whereNotNull' : 'whereNull';
         }
-        elseif ($datatype == 'string' && ( strpos($this->user_val[0],'%') || strpos($this->user_val[0],'_')) ) {
+        elseif ($datatype == 'string' && ( ValidationSys::StringContains('%',$this->user_val[0]) || ValidationSys::StringContains('_',$this->user_val[0])) ) {
             $this->condition = ($this->condition=='!=') ? 'not like' : 'like';
         }
 
