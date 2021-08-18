@@ -28,7 +28,7 @@ trait tCbhModel {
     use tWatsonValidation;
 
     protected $table;       // overriding that of the Eloquent model
-    protected $tableAlias;  // allows us to alias a table, either explicitly or with the "as" keywork in $table
+    protected $tableAlias;  // allows us to alias a table, either explicitly or with the "as" keyword in $table
 
     // A new array called "col_settings" is defined here.  It is (ahem) the only option
     // that needs to be set in the Model definition file, and during _construct()ion it
@@ -43,13 +43,13 @@ trait tCbhModel {
     //    select   The column should be included in the SELECT statement by default
     //    ro       The column is read-only, preventing update via update function
     //    expr:y   y being a valid database expression that can pull data, such as an
-    //             Oracle API call. If not defined, then 
+    //             Oracle API call.
     //
-    protected $col_settings  = [];
-    protected $select_cols   = [];
-    protected $visible_cols  = [];
-    protected $expressions   = [];
-    protected $casts         = [];
+    protected $col_settings = [];
+    protected $select_cols  = [];
+    protected $visible_cols = [];
+    protected $expressions  = [];
+    protected $casts        = [];
 
 
     // additional variable to store the clean user's search
@@ -82,7 +82,7 @@ trait tCbhModel {
             if ( strpos($col_setup,'vis|') !== false ) {
                 $this->visible_cols[] = $colid;
             }
-            $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ?  new RawExpression("{$val[1]} as $colid") : $colid;
+            $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ? new RawExpression("{$val[1]} as $colid") : $colid;
             $this->casts[$colid]       = preg_match('/type:([^\|]*)\|/',$col_setup,$val) ? $val[1] : 'string';
 
         }

@@ -19,10 +19,10 @@
     ],
     "require": {
         "php"                             : ">=7.0",
-        "watson/validating"               : "^3.0",
-        "sebdesign/laravel-state-machine" : "^1.2",
+        "watson/validating"               : "^6.1",
+        "sebdesign/laravel-state-machine" : "^3.2",
         "cartbeforehorse/cbh-validation"  : ">=0.0.1",
-        "cartbeforehorse/laravel-oci8"    : "^5.5.7"
+        "yajra/laravel-oci8"              : "^8.4.1"
     },
     "require-dev": {
         "phpunit/phpunit" : "5.2.*"
