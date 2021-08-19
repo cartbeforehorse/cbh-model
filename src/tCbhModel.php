@@ -103,13 +103,19 @@ trait tCbhModel {
     /******
      * setKeysForSaveQuery()
      * getKeyForSaveQuery()
-     *     A tragic limitation of the base Eloquent framework is that it allows us to define only a
-     *     single column as a primaryKey.  Of course for any real-world scenario this constraint is
-     *     far too limiting, and we therefore extend the base class by overriding the following two
-     *     functions. The original code (and more background) can be found at:
-     *         https://stackoverflow.com/questions/36332005/laravel-model-with-two-primary-keys-update
-     *         https://github.com/laravel/framework/issues/5355
+     *   A harsh limitation of the Eloquent framework is that it doesn't allow
+     *   multi-column primaryKeys.  For any real-world app, this limitation is
+     *   crippling, and so the following few functions try to make good on the
+     *   the otherwise farily-good Eloquent ORM.  More background at:
+     *     https://stackoverflow.com/questions/36332005/laravel-model-with-two-primary-keys-update
+     *     https://github.com/laravel/framework/issues/5355
      **/
+
+    /**
+     * Get the primary key value for a select query.
+     *
+     * @return mixed
+     */
     public function getKeyName() {
         if ( is_string($this->primaryKey) ) {
             return $this->primaryKey;
@@ -117,10 +123,16 @@ trait tCbhModel {
             return $this->primaryKey[0];
         } else {
             return $this->primaryKey;
-            //return '!!what do we do here??';
         }
     }
-    protected function setKeysForSaveQuery (Builder $query) {
+
+    /**
+     * Set the keys for a save update query.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function setKeysForSaveQuery($query) {
         $keys = $this->getKeyName();
         if (!is_array($keys)) {
             return parent::setKeysForSaveQuery ($query);
@@ -130,6 +142,12 @@ trait tCbhModel {
         }
         return $query;
     }
+
+    /**
+     * Get the primary key value for a save query.
+     *
+     * @return mixed
+     */
     protected function getKeyForSaveQuery ($keyName = null) {
         if (is_null($keyName)) {
             $keyName = $this->getKeyName();
