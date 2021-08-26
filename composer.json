@@ -10,27 +10,33 @@
             "email": "osian.ap.garth@cbhsoftware.com"
         }
     ],
+    "comments" : {
+        "repositories": [{
+            "type" : "vcs",
+            "url"  : "https://github.com/cartbeforehorse/laravel-oci8.git"
+        }, {
+            "type" : "package",
+            "package": {
+                "name" : "cartbeforehorse/laravel-oci8",
+                "version": "dev-master",
+                "source" : {
+                    "url"  : "https://github.com/cartbeforehorse/laravel-oci8.git",
+                    "type": "git",
+                    "reference": "master"
+                }
+            }
+        }]
+    },
     "repositories" : [{
         "type" : "vcs",
-        "url"  : "https://github.com/cartbeforehorse/cbh-validation"
-    }, {
-        "type" : "package",
-        "package": {
-            "name" : "cartbeforehorse/laravel-oci8",
-            "version": "dev-master",
-            "source" : {
-                "url"  : "https://github.com/cartbeforehorse/laravel-oci8.git",
-                "type": "git",
-                "reference": "master"
-            }
-        }
+        "url"  : "https://github.com/cartbeforehorse/cbh-validation.git"
     }],
     "require": {
         "php"                             : ">=7.0",
         "watson/validating"               : "^6.1",
         "sebdesign/laravel-state-machine" : "^3.2",
         "cartbeforehorse/cbh-validation"  : ">=0.0.1",
-        "cartbeforehorse/laravel-oci8"    : "dev-master",
+        "yajra/laravel-oci8"              : "^8.4.1",
         "illuminate/support"              : "^8.55",
         "illuminate/database"             : "^8.55"
     },
