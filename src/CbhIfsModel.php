@@ -65,9 +65,10 @@ class CbhIfsModel extends YajraModel {
      */
     protected $info;
     /***
-     * The $attr string holds the last attribute string passed to an IFS function.  The
-     * IFS API functions may modify during execution of ifsInsert() and ifsUpdate(), so
-     * what we put in may not necessarily be the same as what we get out.
+     * $attr holds the last (IFS-formatted) attribute string which drives IFS's New__()
+     * and Modify__() functions.  However we must keep in mind that these IFS functions
+     * can themselves change the attribute-string, so what we feed in isn't necessarily
+     * the same as what we get out.
      * $cf_attr is used for Custom Fields.  The class is designed to make the interface
      * with Custom Fields as transparent as possible to the programmer.  By identifying
      * custom fields with a cf__ prefix (instead of cf$_ as is the IFS standard), it is
