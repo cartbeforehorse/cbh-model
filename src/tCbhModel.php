@@ -30,20 +30,20 @@ trait tCbhModel {
     protected $table;       // overriding that of the Eloquent model
     protected $tableAlias;  // allows us to alias a table, either explicitly or with the "as" keyword in $table
 
-    // A new array called "col_settings" is defined here.  It is (ahem) the only option
-    // that needs to be set in the Model definition file, and during _construct()ion it
-    // will hydrate all of the subsequent arrays.  Of those subsequent arrays, some are
-    // already a part of the Eloquent Model base classes, while others are defined anew
-    // here.
-    // The $col_settings array is built to have the column-name serve as the index, and
-    // a string of configurable settings serve in the value.  The string may consist of
-    // the following, separated by pipes:
-    //    type:x   x being of the types: string, integer, real, float, double, boolean
-    //             date, datetime, timestamp, object, array, collection, json
-    //    select   The column should be included in the SELECT statement by default
-    //    ro       The column is read-only, preventing update via update function
-    //    expr:y   y being a valid database expression that can pull data, such as an
-    //             Oracle API call.
+    //
+    // When using this trait, "col_settings" is the only property that we need
+    // to set in the eventual Eloquent model.  The trait initializer populates
+    // the subsequent properties from the values we set in the first.  Some of
+    // these properties are already a part of the Eloquent model, while others
+    // are defined anew.
+    // "$col_settings" has the column-name as its index, with a pipe-delimited
+    // string to define their settings.  The settings may consist of:
+    //    type:x   Must be a valid cast as in the docs:
+    //               https://laravel.com/docs/8.x/eloquent-mutators#attribute-casting
+    //    select   The column will be included in the model's SELECT statement
+    //    ro       The column is read-only, preventing its update via update()
+    //             though this doesn't seem to be implemented!
+    //    expr:y   y is a valid database expression, like an Oracle API call
     //
     protected $col_settings = [];
     protected $select_cols  = [];
@@ -52,7 +52,7 @@ trait tCbhModel {
     protected $casts        = [];
 
 
-    // additional variable to store the clean user's search
+    // store the user's search - original, clean, executed
     protected $usr_srch = [];
 
     // following variables required by WatsonValidation
@@ -61,9 +61,13 @@ trait tCbhModel {
 
 
     /***
-     * This is effectively the constructor that needs to be called from the Model
+     * initialize{traitName}() is like a constructor for Eloquent traits which
+     * gets called automatically by the Eloquent base-class
      */
-    protected function _bootTrait() {
+    protected function initializetCbhModel() {
+
+        $this->incrementing = false; // why Eloquent sets this true is beyond me
+        $this->primaryKey   = [];
 
         if ( preg_match('/^\w+\s+as\s+(\w+)$/', $this->table, $out) ) {
             $this->tableAlias = $out[1];
@@ -97,7 +101,7 @@ trait tCbhModel {
      */
     public function newEloquentBuilder ($query)
     {
-        return new CbhBuilder ($query, array_values(array_intersect_key($this->expressions, array_flip($this->select_cols))) );
+        return new CbhBuilder ($query, $this->getSelectExpr());
     }
 
     /******
@@ -160,11 +164,12 @@ trait tCbhModel {
 
     /******
      * getQualifiedKeyName()
-     *     In some circumstances, it's very very useful to be able to deinfe an alias for the table
-     *     named in the $this->table variable.  It allows us to do clever SQL manipulation, to nest
-     *     SELECT queries inside one-another, and other quirky bits and bobs.  Unfortunately and as
-     *     is so often the case, the base Eloquent model doesn't fully-support "thinking outside of
-     *     the box", and so we overwrite the base functions to make it work the way we want.
+     *   In some cases it's useful to be able to deinfe an alias for the table
+     *   named in $this->table.  It allows more powerful SQL manipulation such
+     *   as nesting queries and cross-referencing of coluns.  Unfortunately as
+     *   is so often the case with Eloquent, it doesn't fully-support thinking
+     *   outside the box, and so we end up having to override the base classes
+     *   to make it work the way we want.
      */
     public function getQualifiedKeyName()
     {
@@ -199,23 +204,24 @@ trait tCbhModel {
      * scopeProcessUserSearch()
      * getColType()
      * dynamicWhere()
-     *     The following section deals with user-searching capabilities.  As all us good developers
-     *     well know, the only guaranteed ingredient to spoil what would otherwise be a perfect and
-     *     fluent working application, is the intervention of dumb-ass end users.  They get on with
-     *     their lives making it their business to enter all manner of impossible, invalid, corrupt
-     *     and (quite frankly) malicious data, in what can only be described as a deliberate effort
-     *     to sabotage all our development efforts.
-     *     Which brings us back to the purpose of this section.  When users send us query-input for
-     *     their data, we have to make sure it is tidy, and when it isn't tidy, we need to clean it
-     *     up so that it is.  Starting here are the functions which bare the responsibility for all
-     *     that workload, and they start quite simply, by receiving an array of filters for each of
-     *     the model's columns.
+     *   The following section deals with user-searching capabilities.  As all
+     *   good developers know, the only ingredient certain to spoil what would
+     *   otherwise be a perfect, fluent working application, is a dumb-ass end
+     *   user.  They get on with their lives making it their business to enter
+     *   all manner of impossible, invalid, corrupt and malicious data.
+     *   Which brings us back to the purpose of this section.  When users send
+     *   us their search-values to query their data, we have to make sure that
+     *   their input is tidy, and when it isn't we have to clean it up so that
+     *   it is!  Starting here are the functions which bare the responsibility
+     *   for all that work, and they start quite simply, by receiving an array
+     *   of filters for each of the model's columns.
      *
-     *     Please always remember the following principles:
-     *       -> One should keep in mind that the way we handle each search criterion depends on the
-     *          data-type of the value we are rearching on.
-     *       -> Above all remember the Golden Rule: never allow a direct-injection of a user search
-     *          value into the SQL query string - for example through the use of DB::raw().
+     *   Please always remember the following principles:
+     *     -> The way we handle each search criterion depends on the data-type
+     *        of the value we are rearching on.
+     *     -> Above all remember the Golden Rule: never allow direct-injection
+     *        of a user search-value into the final SQL - for example, through
+     *        use of DB::raw().
      *
      */
     protected function cleanSearchString ($str) {
@@ -241,7 +247,7 @@ trait tCbhModel {
             else
                 CodingError::RaiseCodingError (
                     "Unknown Type [{$this->casts[$col]}] on column $col, object " . get_class($this) . ", in " . __METHOD__ .
-                    "  Valid types are [integer, real, float, double, boolean, date, datetime, timestamp, string]"
+                    "  Valid types are [integer, real, float, boolean, date, datetime, timestamp, string]"
                 );
         }
     }
@@ -337,11 +343,6 @@ trait tCbhModel {
 
 
     // getters
-    /**
-     * getMessageBag()
-     *     I found the following function in a Watson library, but it's quite useful in general and
-     *     doesn't depend on Watson's work in any way.
-     */
     public function getMessageBag() {
         return $this->getErrors();
     }
@@ -350,6 +351,9 @@ trait tCbhModel {
     }
     public function getSelectCols() {
         return $this->select_cols;
+    }
+    public function getSelectExpr() {
+        return array_values(array_intersect_key($this->expressions, array_flip($this->select_cols)));
     }
 
     // setters

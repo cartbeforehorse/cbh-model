@@ -2,79 +2,63 @@
 
 namespace Cartbeforehorse\DbModels;
 
-use Cartbeforehorse\Validation\ValidationSys;
 use Cartbeforehorse\Validation\CodingError;
 use Yajra\Oci8\Eloquent\OracleEloquent as YajraModel;
-use Yajra\Pdo\Oci8\Exceptions\Oci8Exception;
 use \DB;
 use \PDO;
 
 class CbhIfsModel extends YajraModel {
 
-    /***
-     * The trait of the CbhModel added here for validation and user-search purposes. We
-     * must also set extending variables in the class, since doing so in the trait will
-     * cause errors that PHP doesn't like.
-     */
     use tCbhModel;
 
-    protected $connection     = 'oracle'; // duh
-    public    $incrementing   = false;    // why Eloquent would ever set the default to true is beyond me
-    protected $primaryKey     = [];       // CbhModel allows the extending class to define a string or an array of strings
-    public    $timestamps     = false;    // The Eloquent model assumes CREATED_AT, UPDATED_AT columns, which we want to kill
+    protected $connection = 'oracle';
+    public    $timestamps = false;
 
     /***
-     * 99% of the time, the Application Owner (or app-owner) in IFS is simply given the
-     * name IFSAPP. However, exceptions do exist out there, and in theory the app-owner
-     * can be called anything. We must therefore provide flexibility in our application
-     * to allow the IFS app-owner's name to change. Defined as private since this value
-     * should never be allowed to change once set.
+     * 99% of the time the IFS schema owner is IFSAPP.  However, exceptions do
+     * exist, and so we need to program flexibility into the solution.
      */
     private $appowner   = 'ifsapp';
 
     /***
-     * Note that in the IFS context, the $table value will normally refer to a database
-     * view.  This is a knock-on effect of how IFS works, and prefers to query data via
-     * a view rather than directly from a table.  In most situations in IFS, each table
-     * (e.g. supplier_info_tab) has a corresponding view (supplier_info) that selects *
-     * directly from the underlying table.  Because Eloquent doesn't distinguish tables
-     * and views when building its SQL queries, it is safer for us to build our queries
-     * on the views - which automatically prevents us from doing direct inserts against
-     * IFS tables and "accidentally" circumventing the IFS Business Logic.
-     * If we wish to update data in IFS, we must do so by routing our update command by
-     * IFS's PL/SQL API package (supplier_info_api).  The package name is significantly
-     * important that it warants its own property in the IFS Model.
+     * Note that in the IFS context, the $table value will normally refer to a
+     * database view.  This is a consequence of how IFS prefers to select data
+     * from views rather than directly from tables.  Because Eloquent does not
+     * distinguish between tables and views when building SQL, it is safer for
+     * us to build on views - which automatically prevents reckless developers
+     * from "accidentally" circumventing the IFS Business Logic.
+     * Updates on the IFS database (using this class anyway), must be done via
+     * the IFS package through functions: ifsInsert() and ifsUpdate()
      */
-    protected $package;         // @str will be defined alongside the $table property
-    protected $cf_package;      // @str to deal with IFS Custom Field updates
+    protected string $package;    // package that has the IFS business logic
+    protected string $cf_package; // And the corresponding CFP package
 
 
     /***
-     * These arrays respond to IFS's model of setting columns insertalbe and modifiable
-     * and I hope that you find them to be appropriately named.  We make use of them in
-     * the ifsInsert() and ifsUpdate() functions below.
+     * These arrays correspond to IFS's concept for setting columns insertalbe
+     * and modifiable.  We make use of them in the ifsInsert() and ifsUpdate()
+     * functions below.
      */
     protected $insertable_cols = [];
     protected $updatable_cols  = [];
 
 
     /***
-     * The $info string simply holds information provided as feedback from IFS, when we
-     * attempt to manipulate data. It won't be used very often, but is worth keeping as
-     * an object property for the odd occasion.
+     * The $info string simply holds information provided as feedback from IFS
+     * when we attempt to manipulate data.
      */
     protected $info;
     /***
-     * $attr holds the last (IFS-formatted) attribute string which drives IFS's New__()
-     * and Modify__() functions.  However we must keep in mind that these IFS functions
-     * can themselves change the attribute-string, so what we feed in isn't necessarily
-     * the same as what we get out.
-     * $cf_attr is used for Custom Fields.  The class is designed to make the interface
-     * with Custom Fields as transparent as possible to the programmer.  By identifying
-     * custom fields with a cf__ prefix (instead of cf$_ as is the IFS standard), it is
-     * possible to insert and update Custom Fields as normal properties on the standard
-     * CbhIfsModel{} class.  There is no need to create a secondary Model to manage the
-     * CFT Custom Table.  This class is a one-stop-shop!
+     * $attr stores the latest IFS-attribute string which drives IFS's New__()
+     * and Modify__() functions.  Remember that IFS can change the attr string
+     * itself through these methods, so what we feed in isn't necessarily what
+     * we get out.
+     * $cf_attr is used for IFS Custom Fields.  This PHP interface is designed
+     * to make working with CFs as transparent as possible for developers, and
+     * does so by allowing the columns on the model to be prefixed with 'cf__'
+     * (instead of CF$_ as is the IFS standard).  By using this convention, we
+     * can treat CFs like any other standard column on the Model.  There is no
+     * need for a secondary Model to manage the CFT.
      */
     protected $attr;
     protected $cf_attr;
@@ -84,8 +68,6 @@ class CbhIfsModel extends YajraModel {
      * Start logic here
      */
     public function __construct (array $attributes = []) {
-
-        $this->_bootTrait();
 
         foreach ($this->col_settings as $colid => $col_setup) {
 
@@ -107,9 +89,8 @@ class CbhIfsModel extends YajraModel {
 
 
     /***
-     * We want to disable the framework from allowing a direct save() onto the database
-     * by hiding the inherited function.
-     * There are a whole bunch of functions which we'll need to protect in this way.
+     * We want to prevent the framework from allowing a direct save() onto the
+     * database.  In fact, there are a bunch of functions we need to catch.
      */
     public static function create (array $attributes = []) {
         CodingError::RaiseCodingError ('Direct insert on tables is not allowed in IfsModel{}');
@@ -299,11 +280,13 @@ class CbhIfsModel extends YajraModel {
 
 
     /*********************
-     * Scopes for fetching data from $table
-     * I'm not sure if it's possible here to also fetch from $view on occasion?
+     * Scopes for fetching data from $table.  Remember that in the IFS context
+     * we should always select from the view, because our standard users don't
+     * have privileges on the underlying table
+     *
      */
     public function scopeFetchByObjid ($query, $objid, $objver) {
-        return $query -> select ($this->viscols)
+        return $query -> select ($this->select_cols)
             -> where ('objid',      $objid)
             -> where ('objversion', $objver);
     }
