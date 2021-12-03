@@ -6,6 +6,7 @@ use Cartbeforehorse\DbModels\sqlConditions\WhereCondition;
 use Cartbeforehorse\DbModels\Builders\CbhBuilder;
 use Cartbeforehorse\Validation\ValidationSys;
 use Cartbeforehorse\Validation\CodingError;
+use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Expression as RawExpression;
 use Watson\Validating\ValidatingTrait as tWatsonValidation;
@@ -42,7 +43,6 @@ trait tCbhModel {
     //               https://laravel.com/docs/8.x/eloquent-mutators#attribute-casting
     //    select   The column will be included in the model's SELECT statement
     //    ro       The column is read-only, preventing its update via update()
-    //             though this doesn't seem to be implemented!
     //    expr:y   y is a valid database expression, like an Oracle API call
     //
     protected $col_settings = [];
@@ -105,6 +105,8 @@ trait tCbhModel {
     }
 
     /******
+     * getKey()
+     * getKeyName()
      * setKeysForSaveQuery()
      * getKeyForSaveQuery()
      *   A harsh limitation of the Eloquent framework is that it doesn't allow
@@ -115,19 +117,57 @@ trait tCbhModel {
      *     https://github.com/laravel/framework/issues/5355
      **/
 
+    protected function stringifyPk() {
+        if ( is_array($this->primaryKey) && count($this->primaryKey)==1 ) {
+            return $this->primaryKey[0];
+        }
+        return $this->primaryKey;
+    }
+
     /**
-     * Get the primary key value for a select query.
+     * Get the PK value for a select query.  This override function knows that
+     * the key can be an array.
      *
      * @return mixed
      */
-    public function getKeyName() {
-        if ( is_string($this->primaryKey) ) {
-            return $this->primaryKey;
-        } elseif ( is_array($this->primaryKey) && count($this->primaryKey)==1 ) {
-            return $this->primaryKey[0];
-        } else {
-            return $this->primaryKey;
+    public function getKeyName ($as_array = false) {
+
+        $pk = $this->stringifyPk();
+
+        if ( is_array($pk) && !$as_array ) {
+            $key_str = '';
+            foreach ($pk as $col_id) {
+                $key_str .= $col_id . '^';
+            }
+            return $key_str;
         }
+        return $pk;
+    }
+
+    /**
+     * Get the value of the model's primary key.  Again, this override version
+     * is aware of composite primary keys.
+     *
+     * @return mixed
+     */
+    public function getKey ($as_array = false) {
+
+        $pk = $this->stringifyPk();
+
+        if ( is_array($pk) && $as_array ) {
+            $key_array = [];
+            foreach ($pk as $col_name) {
+                $key_array[] = $this->getAttribute($col_name);
+            }
+            return $key_array;
+        } elseif ( is_array($pk) && !$as_array ) {
+            $key_str = '';
+            foreach ($pk as $col_id) {
+                $key_str .= $this->getAttribute($col_id) . '^';
+            }
+            return $key_str;
+        }
+        return $this->getAttribute($pk); // $pk is a string
     }
 
     /**
@@ -137,7 +177,7 @@ trait tCbhModel {
      * @return \Illuminate\Database\Eloquent\Builder
      */
     protected function setKeysForSaveQuery($query) {
-        $keys = $this->getKeyName();
+        $keys = $this->getKeyName(true);
         if (!is_array($keys)) {
             return parent::setKeysForSaveQuery ($query);
         }
@@ -156,10 +196,22 @@ trait tCbhModel {
         if (is_null($keyName)) {
             $keyName = $this->getKeyName();
         }
-        if (isset($this->original[$keyName])) {
-            return $this->original[$keyName];
+        return $this->original[$keyName] ?? $this->getAttribute($keyName);
+    }
+
+    /**
+     * Qualify the given column name by the model's table or table-alias
+     *
+     * @param  string  $column
+     * @return string
+     */
+    public function qualifyColumn($column) {
+        if (Str::contains($column, '.')) {
+            return $column;
+        } elseif ( !empty($this->tableAlias) ) {
+            return $this->tableAlias . '.' . $column;
         }
-        return $this->getAttribute ($keyName);
+        return $this->getTable().'.'.$column;
     }
 
     /******
@@ -171,13 +223,31 @@ trait tCbhModel {
      *   outside the box, and so we end up having to override the base classes
      *   to make it work the way we want.
      */
-    public function getQualifiedKeyName()
-    {
-        if ( empty($this->tableAlias) ) {
-            return $this->getTable() . '.' . $this->getKeyName();
-        } else {
-            return $this->tableAlias . '.' . $this->getKeyName();
+    public function getQualifiedKeyName ($col_id = null) {
+        return $this->qualifyColumn($col_id ?? $this->getKeyName());
+    }
+    /**
+     * Get a new query to restore one or more models by their queueable IDs.
+     *
+     * @param  array|int  $ids
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function newQueryForRestoration ($ids) {
+
+        $builder = $this->newQueryWithoutScopes();
+
+        if ( is_array($ids) ) {
+            foreach ($ids as $key_val) {
+                $builder->orWhere (function ($builder) use ($key_val) {
+                    $builder->fetchByPk (array_combine(
+                        $this->primaryKey,
+                        explode ('^', rtrim($key_val,'^'))
+                    ));
+                });
+            }
         }
+        return $builder;
+
     }
 
 
@@ -200,37 +270,15 @@ trait tCbhModel {
         return parent::find ($id, array_values($this->expressions));
     }
 
-    /*******
-     * scopeProcessUserSearch()
-     * getColType()
-     * dynamicWhere()
-     *   The following section deals with user-searching capabilities.  As all
-     *   good developers know, the only ingredient certain to spoil what would
-     *   otherwise be a perfect, fluent working application, is a dumb-ass end
-     *   user.  They get on with their lives making it their business to enter
-     *   all manner of impossible, invalid, corrupt and malicious data.
-     *   Which brings us back to the purpose of this section.  When users send
-     *   us their search-values to query their data, we have to make sure that
-     *   their input is tidy, and when it isn't we have to clean it up so that
-     *   it is!  Starting here are the functions which bare the responsibility
-     *   for all that work, and they start quite simply, by receiving an array
-     *   of filters for each of the model's columns.
+
+    /***
+     * Classifies the column's data-type into a constrained list.  Useful when
+     * functionality depends on the column's data-type
      *
-     *   Please always remember the following principles:
-     *     -> The way we handle each search criterion depends on the data-type
-     *        of the value we are rearching on.
-     *     -> Above all remember the Golden Rule: never allow direct-injection
-     *        of a user search-value into the final SQL - for example, through
-     *        use of DB::raw().
-     *
+     * @param  string $col
+     * @return string val:number|boolean|date|string
      */
-    protected function cleanSearchString ($str) {
-        $str = trim ($str, ';|');
-        $str = preg_replace ('/\|\|+/', '|', $str);
-        $str = preg_replace ('/[\|;][\|;]+/', ';', $str);
-        return $str;
-    }
-    protected function getColType ($col) {
+    public function getColType ($col) {
         if ( !isset($this->casts[$col]) ) {
             CodingError::RaiseCodingError ("Column '$col' needs to be defined in casts array in " . get_class($this));
         } else {
@@ -247,12 +295,51 @@ trait tCbhModel {
             else
                 CodingError::RaiseCodingError (
                     "Unknown Type [{$this->casts[$col]}] on column $col, object " . get_class($this) . ", in " . __METHOD__ .
-                    "  Valid types are [integer, real, float, boolean, date, datetime, timestamp, string]"
+                    "  Valid types are [integer, real, float, double, boolean, date, datetime, timestamp, string]"
                 );
         }
     }
 
-    public function scopeProcessUserSearch (Builder $builder, array $usr_srch_arr) {
+
+    /*******
+     * scopeProcessUserSearch()
+     * stripExcessSplitters()
+     * dynamicWhere()
+     *   The following section deals with user-searching capabilities.  As all
+     *   good developers know, the only ingredient certain to spoil what would
+     *   otherwise be a perfect, fluent working application, is a dumb-ass end
+     *   user.  They get on with their lives making it their business to enter
+     *   all manner of impossible, invalid, corrupt and malicious data.
+     *   Which brings us back to the purpose of this section.  When users send
+     *   us their search-values to query their data, we have to make sure that
+     *   their input is tidy, and when it isn't we have to clean it up so that
+     *   it is!  Starting here are the functions which bare the responsibility
+     *   for all that work, and they start quite simply, by receiving an array
+     *   of filters for each of the model's columns.  The steps are:
+     *     1. Strip excessive splitters (;|..)
+     *         |-> this string will become the "original_search"
+     *     2. Explode OR ; then AND | separators
+     *     3. The WhereCondition{} object evaluates the quality of each search
+     *        term after they've been split apart.  Each WhereCondition{} then
+     *        declares itself to be $valid or not.
+     *
+     *   Please always remember the following principles:
+     *     -> The way we handle each search criterion depends on the data-type
+     *        of the value we are rearching on.
+     *     -> Above all remember the Golden Rule: never allow direct-injection
+     *        of a user search-value into the final SQL - for example, through
+     *        use of DB::raw().
+     *
+     */
+
+    protected function stripExcessSplitters ($str) {
+        $str = trim ($str, ';|');
+        $str = preg_replace ('/\|\|+/', '|', $str);
+        $str = preg_replace ('/[\|;][\|;]+/', ';', $str);
+        return $str;
+    }
+
+    public function scopeProcessUserSearch (Builder $builder, array $usr_srch_arr) : Builder {
 
         //
         // 1. Loop on each column to collect data that the user is really searching on
@@ -263,8 +350,10 @@ trait tCbhModel {
         //
         foreach ($usr_srch_arr as $col => $srch) {
 
+            $srch_clean = $this->stripExcessSplitters ($srch);
+
             $this->usr_srch[$col]['original_search'] = $srch;
-            $this->usr_srch[$col]['clean_search']    = $this->cleanSearchString ($srch);
+            $this->usr_srch[$col]['clean_search']    = $srch_clean;
             $this->usr_srch[$col]['executed_search'] = [];
 
             if (ValidationSys::IsNonEmptyString ($this->usr_srch[$col]['clean_search'])) {
@@ -342,12 +431,29 @@ trait tCbhModel {
     }
 
 
+    private function filterSearchType($type) {
+        $x = [];
+        foreach ($this->usr_srch as $col => $srch) {
+            $x[$col] = $srch[$type];
+        }
+        return $x;
+    }
+
     // getters
     public function getMessageBag() {
         return $this->getErrors();
     }
     public function getUserSearch() {
         return $this->usr_srch;
+    }
+    public function getOriginalSearch() {
+        return $this->filterSearchType('original_search');
+    }
+    public function getCleanSearch() {
+        return $this->filterSearchType('clean_search');
+    }
+    public function getExecutedSearch() {
+        return $this->filterSearchType('executed_search');
     }
     public function getSelectCols() {
         return $this->select_cols;

@@ -2,8 +2,10 @@
 
 namespace Cartbeforehorse\DbModels;
 
+use Cartbeforehorse\Validation\ValidationSys;
 use Cartbeforehorse\Validation\CodingError;
 use Yajra\Oci8\Eloquent\OracleEloquent as YajraModel;
+use Yajra\Pdo\Oci8\Exceptions\Oci8Exception;
 use \DB;
 use \PDO;
 

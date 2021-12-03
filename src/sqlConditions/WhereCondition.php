@@ -7,25 +7,23 @@ use Carbon\Carbon;
 
 /*********
  * WhereCondition{}
- *   An object to represent the WHERE condition that we shall to amend to the final SQL query.
- *   It seems neater somehow to represent this as an object as it allows us to encapsulate all
- *   the "stupid user invalid input" logic in one self-contained class.  Trying to do all this
- *   in a function seemed to get a little unwieldy.
+ *   An object that represents the WHERE condition of an SQL query.  It allows
+ *   us to manage all the "stupid-user invalid-search" logic in one place.
  */
 class WhereCondition {
 
-    public  $column;            // name of column
-    public  $datatype;          // datatype of the database column (number/string/date)
-    public  $condition;         // {whereBetween, whereNotBetween, whereNull, whereNotNull, =, !=, >, >=, <, <=}
-    private $user_val;          // Array: user's input query-values with $condition removed
-    private $val;               // Array: query values to be used in Eloquent's functions
-    public  $valid = true;      // Bool: whether the condition is valid
+    public  string $column;       // name of column
+    public  string $datatype;     // datatype of the database column (number/string/date)
+    public  string $condition;    // {whereBetween, whereNotBetween, whereNull, whereNotNull, =, !=, >, >=, <, <=}
+    private array  $user_val;     // user's input query-values with $condition removed
+    private array  $val;          // query values to be used in Eloquent's functions
+    public  bool   $valid = true; // whether the condition is valid
 
 
     public function __construct ($col, $datatype, $query_values_arr) {
 
         //
-        // For debugging purposes, remember that incoming values may be preceded with:
+        // Incoming values may be preceded with:
         //     ->  = (default), !, !=, <>, >, >=, <, <=
         // Also, special values are:
         //     ->  !, % (representing 'null' and 'not null')
@@ -67,23 +65,21 @@ class WhereCondition {
 
     private function evaluateSearchVal ($i) {
 
-        //
-        // At this point, we are safe to assume that the value in $this->user_val[$i] is
-        // a perfectly clean value for checking.  We don't need to worry about condition
-        // values as these have already been calculated.  We've also already removed all
-        // semi-colons, pipes and double-dot key values.  The only consideration left to
-        // worry about is the column's data-type.
+        // By now, we are safe to assume that the value in $this->user_val[$i]
+        // is a singleton, and that it is ready to be checked according to its
+        // $datatype.  All the pre-processing has been done so the conditional
+        // markers, semi-colons, pipes and range-markers are already stripped.
         //
         if ($this->datatype == 'string') {
             $this->val[$i] = $this->user_val[$i];
         }
         elseif ($this->datatype == 'number') {
-            $sanitised_expr = preg_replace ('/\s+|[^+\/*\^%\-\d\.()]/', '', $this->user_val[$i]);
-            $sanitised_expr = preg_replace ('/\.(\D)/', '$1', $sanitised_expr);
-            $sanitised_expr = rtrim ($sanitised_expr, '+/*^%-.');
+            // should I be a little more lenient here?
+            //$sanitised_expr = preg_replace ('/\s+|[^+\/*\^%\-\d\.()]/', '', $this->user_val[$i]);
+            //$sanitised_expr = preg_replace ('/\.(\D)/', '$1', $sanitised_expr);
+            //$sanitised_expr = rtrim ($sanitised_expr, '+/*^%-.');
             try {
-                $str = "\$result = $sanitised_expr;";
-                eval ($str);
+                eval ($str = "\$result = {$this->user_val[$i]}");
                 if ( is_numeric($result) ) {
                     $this->val[$i] = $result;
                 } else {
@@ -94,10 +90,15 @@ class WhereCondition {
             }
         }
         elseif ($this->datatype == 'date') {
-            // We use Carbon to parse the incoming date-time values, although Carbon really only piggy-backs
-            // the base PHP class DateTime{}.  See also the PHP documentation on function "strtotime()" that
-            // does a fair job at explaining the flexibility allowed in the incoming date-string.  This next
-            // list describes valid input values:
+            // To parse the incoming date (and date-time) values, we shall use
+            // a package called Carbon.  But with that said, we should also be
+            // aware thatn Carbon, really, only piggy-backs the underlying PHP
+            // class DateTime{}, and in that sense it's worth taking a look at
+            // the PHP docs for function "strtotime()".  Those docs are a good
+            // place to start if you are looking to understand the flexibility
+            // and limitations that the user has for entering date-formats and
+            // for writing dynamic queries around date/time calculations.  All
+            // of the following examples are valid user inputs:
             //  - 01/03/2017
             //  - 01/03/2017 06:00
             //  - 01/03/2017 6pm
@@ -107,10 +108,12 @@ class WhereCondition {
             //  - tomorrow - 1 millisecond
             //  - next Wednesday
             //  - first day of Jan
-            // Be particularly aware that the parsing engine recognises different separators as belonging to
-            // different date-formats.  The following list illustrates the point:
-            //  - 01/03/2017   >> American format meaning: 03 Jan 2017
-            //  - 01-03-2017   >> European format meaning: 01 Mar 2017
+            // In particular you should know that the DateTime{} parser takesx
+            // In particular, you'll note that the DateTime{} class interprets
+            // different separators as being from different international date
+            // formats.  The following list illustrates the point:
+            //  - 01/03/2017 >> American format meaning: 03 Jan 2017
+            //  - 01-03-2017 >> European format meaning: 01 Mar 2017
             //
 
             $usr_date_format = 'eur';  // iso, usa also allowed; we shall fetch this from the user profile once we've built a user-profile into the system
@@ -128,7 +131,6 @@ class WhereCondition {
             }
         }
     }
-
 
 
     /****
@@ -152,7 +154,7 @@ class WhereCondition {
         # see also: http://carbon.nesbot.com/docs/#api-formatting
 
         if ( !$this->valid ) {
-            return '';
+            return '/**err**/';
         } elseif ($this->condition == 'whereNull') {
             return '!';
         } elseif ($this->condition == 'whereNotNull') {
