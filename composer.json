@@ -10,35 +10,16 @@
             "email": "osian.ap.garth@cbhsoftware.com"
         }
     ],
-    "comments" : {
-        "repositories": [{
-            "type" : "vcs",
-            "url"  : "https://github.com/cartbeforehorse/laravel-oci8.git"
-        }, {
-            "type" : "package",
-            "package": {
-                "name" : "cartbeforehorse/laravel-oci8",
-                "version": "dev-master",
-                "source" : {
-                    "url"  : "https://github.com/cartbeforehorse/laravel-oci8.git",
-                    "type": "git",
-                    "reference": "master"
-                }
-            }
-        }]
-    },
     "repositories" : [{
         "type" : "vcs",
         "url"  : "https://github.com/cartbeforehorse/cbh-validation.git"
     }],
     "require": {
-        "php"                             : ">=7.0",
-        "watson/validating"               : "^6.1",
-        "sebdesign/laravel-state-machine" : "^3.2",
+        "php"                             : ">=8.0",
+        "watson/validating"               : ">=7",
+        "sebdesign/laravel-state-machine" : ">=3",
         "cartbeforehorse/cbh-validation"  : ">=0.0.1",
-        "yajra/laravel-oci8"              : "^8.4.1",
-        "illuminate/support"              : "^8.55",
-        "illuminate/database"             : "^8.55"
+        "yajra/laravel-oci8"              : ">=9"
     },
     "require-dev": {
         "phpunit/phpunit" : "^9.3.3"
@@ -47,6 +28,14 @@
         "psr-4": {
             "Cartbeforehorse\\DbModels\\": "src/"
         }
+    },
+    "autoload-dev": {
+        "classmap": [
+            "./../cbh-validation"
+        ],
+        "exclude-from-classmap": [
+            "vendor/cartbeforehorse/cbh-validation"
+        ]
     },
     "minimum-stability": "dev",
     "prefer-stable": true
