@@ -31,23 +31,43 @@ trait tCbhModel {
     protected $table;       // overriding that of the Eloquent model
     protected $tableAlias;  // allows us to alias a table, either explicitly or with the "as" keyword in $table
 
-    //
-    // When using this trait, "col_settings" is the only property that we need
-    // to set in the eventual Eloquent model.  The trait initializer populates
-    // the subsequent properties from the values we set in the first.  Some of
-    // these properties are already a part of the Eloquent model, while others
-    // are defined anew.
-    // "$col_settings" has the column-name as its index, with a pipe-delimited
-    // string to define their settings.  The settings may consist of:
-    //    type:x   Must be a valid cast as in the docs:
-    //               https://laravel.com/docs/8.x/eloquent-mutators#attribute-casting
-    //    select   The column will be included in the model's SELECT statement
-    //    ro       The column is read-only, preventing its update via update()
-    //    expr:y   y is a valid database expression, like an Oracle API call
-    //
+    /***
+     * A standard Eloquent Model has a number of class properties that control
+     * how each attribute (or "column") behaves.  However, this way of storing
+     * an attribute's properties makes it hard to see an overview of any given
+     * attribute.
+     * This is why this trait introduces a $col_Settings property.  By placing
+     * all of our attributes' properties in a single well-formatted string, we
+     * can more easily see the overall picture of how a Model should behave.
+     * The trait initializer populates Eloquent's standard properties (as well
+     * as a few additional ones of our own which are useful in the client-side
+     * of the application).  The array-keys are the attribute of the model and
+     * the value is a pipe-delimited string of settings as below:
+     *    pk       Defines the primary key of the model (or underlying table).
+     *             Note that our model supports multi-column PKs.
+     *    i        insertable
+     *    u        updatable
+     *    ro       The column is read-only, preventing its update via update()
+     *    type:x   Must be a valid cast as in the docs:
+     *               https://laravel.com/docs/8.x/eloquent-mutators#attribute-casting
+     *             Knowing the cast-type helps with front-end decisions of how
+     *             we display data to end-users.
+     *    select   The column will be included in the model's SELECT statement
+     *             by default.  This can be overriden in each individual qyery
+     *             built from the model.
+     *    expr:y   y is a valid database expression such as an Oracle API call
+     *             or arithmetic calculation or other valid function call
+     *    fillable The column will be added to Eloquent's $fillable array     
+     *    hidden   The column will be added to Eloquent's $hidden array
+     * 
+     * It's important to remember that a Model may still define standard Model
+     * properties in the usual way.
+     * 
+     **/
     protected $col_settings = [];
     protected $select_cols  = [];
-    protected $visible_cols = [];
+    protected $fillable     = [];
+    protected $hidden       = [];
     protected $expressions  = [];
     protected $casts        = [];
 
@@ -67,7 +87,7 @@ trait tCbhModel {
     protected function initializetCbhModel() {
 
         $this->incrementing = false; // why Eloquent sets this true is beyond me
-        $this->primaryKey   = [];
+        $this->primaryKey = is_string($this->primaryKey) ? [$this->primaryKey] : [];
 
         if ( preg_match('/^\w+\s+as\s+(\w+)$/', $this->table, $out) ) {
             $this->tableAlias = $out[1];
@@ -77,14 +97,17 @@ trait tCbhModel {
 
             $col_setup = trim ($col_setup, '|') . '|';
 
-            if ( strpos($col_setup,'pk|') !== false ) {
+            if ( strpos($col_setup,'pk|') !== false && !in_array($colid, $this->primaryKey) ) {
                 $this->primaryKey[] = $colid;
             }
-            if ( strpos($col_setup,'select|') !== false ) {
+            if ( strpos($col_setup,'select|') !== false && !in_array($colid, $this->select_cols) ) {
                 $this->select_cols[] = $colid;
             }
-            if ( strpos($col_setup,'vis|') !== false ) {
-                $this->visible_cols[] = $colid;
+            if ( strpos($col_setup,'fill|') !== false && !in_array($colid, $this->fillable) ) {
+                $this->fillable[] = $colid;
+            }
+            if ( strpos($col_setup,'hidden|') !== false && !in_array($colid, $this->hidden) ) {
+                $this->hidden[] = $colid;
             }
             $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ? new RawExpression("{$val[1]} as $colid") : $colid;
             $this->casts[$colid]       = preg_match('/type:([^\|]*)\|/',$col_setup,$val) ? $val[1] : 'string';
@@ -458,9 +481,27 @@ trait tCbhModel {
     public function getSelectCols() {
         return $this->select_cols;
     }
+    public function getSelectLessHiddenCols() {
+        return array_diff ($this->select_cols, $this->hidden);
+    }
     public function getSelectExpr() {
         return array_values(array_intersect_key($this->expressions, array_flip($this->select_cols)));
     }
+    public function getSelectColsWithTypes() {
+        $arr = [];
+        foreach ($this->select_cols as $colid) {
+            $arr[$colid] = $this->getColType($colid);
+        }
+        return $arr;
+    }
+    public function getSelectLessHiddenColsWithType() {
+        $arr = [];
+        foreach ($this->getSelectLessHiddenCols() as $colid) {
+            $arr[$colid] = $this->getColType($colid);
+        }
+        return $arr;
+    }
+
 
     // setters
     public function wipeUserSearch () {
