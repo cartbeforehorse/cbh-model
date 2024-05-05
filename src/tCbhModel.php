@@ -7,6 +7,7 @@ use Cartbeforehorse\DbModels\Builders\CbhBuilder;
 use Cartbeforehorse\Validation\ValidationSys;
 use Cartbeforehorse\Validation\CodingError;
 use Illuminate\Support\Str;
+use Illuminate\Support\Arr;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Expression as RawExpression;
 use Watson\Validating\ValidatingTrait as tWatsonValidation;
@@ -59,6 +60,7 @@ trait tCbhModel {
      *             or arithmetic calculation or other valid function call
      *    fillable The column will be added to Eloquent's $fillable array     
      *    hidden   The column will be added to Eloquent's $hidden array
+     *    gui      Shown in the GUI
      * 
      * It's important to remember that a Model may still define standard Model
      * properties in the usual way.
@@ -70,6 +72,7 @@ trait tCbhModel {
     protected $hidden       = [];
     protected $expressions  = [];
     protected $casts        = [];
+    protected $gui_cols     = [];
 
 
     // store the user's search - original, clean, executed
@@ -108,6 +111,9 @@ trait tCbhModel {
             }
             if ( strpos($col_setup,'hidden|') !== false && !in_array($colid, $this->hidden) ) {
                 $this->hidden[] = $colid;
+            }
+            if ( strpos($col_setup,'gui|') !== false && !in_array($colid, $this->gui_cols) ) {
+                $this->gui_cols[] = $colid;
             }
             $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ? new RawExpression("{$val[1]} as $colid") : $colid;
             $this->casts[$colid]       = preg_match('/type:([^\|]*)\|/',$col_setup,$val) ? $val[1] : 'string';
@@ -377,7 +383,7 @@ trait tCbhModel {
 
             $this->usr_srch[$col]['original_search'] = $srch;
             $this->usr_srch[$col]['clean_search']    = $srch_clean;
-            $this->usr_srch[$col]['executed_search'] = [];
+            $this->usr_srch[$col]['executed_search'] = '';
 
             if (ValidationSys::IsNonEmptyString ($this->usr_srch[$col]['clean_search'])) {
                 // loop on each 'OR' condition
@@ -385,6 +391,7 @@ trait tCbhModel {
                     // loop on each 'AND' condition
                     foreach (explode ('|', $col_srch) as $key => $val) {
                         $this->usr_srch[$col]['srch_obj'][$nr][$key]        = new WhereCondition ($col, $this->getColType($col), explode ('..', $val));
+                        $this->usr_srch[$col]['executed_search']            = array();
                         $this->usr_srch[$col]['executed_search'][$nr][$key] = $this->usr_srch[$col]['srch_obj'][$nr][$key]->getCleanUserSearchString();
                     }
                 }
@@ -478,8 +485,17 @@ trait tCbhModel {
     public function getExecutedSearch() {
         return $this->filterSearchType('executed_search');
     }
+    public function getSearchToSaveToProfile() {
+        return Arr::map ($this->usr_srch, fn (array $col_searches) => [
+            'originalSearch' => $col_searches['original_search'],
+            'executedSearch' => $col_searches['executed_search']
+        ]);
+    }
     public function getSelectCols() {
         return $this->select_cols;
+    }
+    public function getGuiCols() {
+        return $this->gui_cols;
     }
     public function getSelectLessHiddenCols() {
         return array_diff ($this->select_cols, $this->hidden);
@@ -497,6 +513,13 @@ trait tCbhModel {
     public function getSelectLessHiddenColsWithType() {
         $arr = [];
         foreach ($this->getSelectLessHiddenCols() as $colid) {
+            $arr[$colid] = $this->getColType($colid);
+        }
+        return $arr;
+    }
+    public function getGuiColsWithTypes() {
+        $arr = [];
+        foreach ($this->gui_cols as $colid) {
             $arr[$colid] = $this->getColType($colid);
         }
         return $arr;

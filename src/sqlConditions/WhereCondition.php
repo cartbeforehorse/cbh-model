@@ -79,14 +79,16 @@ class WhereCondition {
             //$sanitised_expr = preg_replace ('/\.(\D)/', '$1', $sanitised_expr);
             //$sanitised_expr = rtrim ($sanitised_expr, '+/*^%-.');
             try {
-                eval ($str = "\$result = {$this->user_val[$i]}");
+                eval ("\$result = {$this->user_val[$i]};");
                 if ( is_numeric($result) ) {
                     $this->val[$i] = $result;
                 } else {
-                    $this->valid = false;
+                    $this->val[$i] = '';
+                    $this->valid   = false;
                 }
             } catch (\Throwable $t) {
-                $this->valid = false;
+                $this->val[$i] = '';
+                $this->valid   = false;
             }
         }
         elseif ($this->datatype == 'date') {
