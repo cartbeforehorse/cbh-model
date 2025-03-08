@@ -11,6 +11,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Expression as RawExpression;
 use Watson\Validating\ValidatingTrait as tWatsonValidation;
+use Exception;
 
 /**
  *  CbhModel{}
@@ -45,6 +46,8 @@ trait tCbhModel {
      * of the application).  The array-keys are the attribute of the model and
      * the value is a pipe-delimited string of settings as below:
      *    pk       Defines the primary key of the model (or underlying table).
+     *    inc      Assuming the primary-key is a single-column integer, we can
+     *             set it as auto-incrementing with this flag
      *             Note that our model supports multi-column PKs.
      *    i        insertable
      *    u        updatable
@@ -89,8 +92,8 @@ trait tCbhModel {
      */
     protected function initializetCbhModel() {
 
-        $this->incrementing = false; // why Eloquent sets this true is beyond me
         $this->primaryKey = is_string($this->primaryKey) ? [$this->primaryKey] : [];
+        $set_incrementing = false; // we set to false by default, forcing the user to define it in $col_settings
 
         if ( preg_match('/^\w+\s+as\s+(\w+)$/', $this->table, $out) ) {
             $this->tableAlias = $out[1];
@@ -98,27 +101,35 @@ trait tCbhModel {
 
         foreach ($this->col_settings as $colid => $col_setup) {
 
-            $col_setup = trim ($col_setup, '|') . '|';
+            $col_setup = '|' . trim ($col_setup, '|') . '|';
 
-            if ( strpos($col_setup,'pk|') !== false && !in_array($colid, $this->primaryKey) ) {
+            if ( strpos($col_setup,'|pk|') !== false && !in_array($colid, $this->primaryKey) ) {
                 $this->primaryKey[] = $colid;
             }
-            if ( strpos($col_setup,'select|') !== false && !in_array($colid, $this->select_cols) ) {
+            if ( strpos($col_setup,'|inc|') !== false || strpos($col_setup,'|incrementing|') !== false ) {
+                $set_incrementing = true;
+            }
+            if ( strpos($col_setup,'|select|') !== false && !in_array($colid, $this->select_cols) ) {
                 $this->select_cols[] = $colid;
             }
-            if ( strpos($col_setup,'fill|') !== false && !in_array($colid, $this->fillable) ) {
+            if ( strpos($col_setup,'|fill|') !== false && !in_array($colid, $this->fillable) ) {
                 $this->fillable[] = $colid;
             }
-            if ( strpos($col_setup,'hidden|') !== false && !in_array($colid, $this->hidden) ) {
+            if ( strpos($col_setup,'|hidden|') !== false && !in_array($colid, $this->hidden) ) {
                 $this->hidden[] = $colid;
             }
-            if ( strpos($col_setup,'gui|') !== false && !in_array($colid, $this->gui_cols) ) {
+            if ( strpos($col_setup,'|gui|') !== false && !in_array($colid, $this->gui_cols) ) {
                 $this->gui_cols[] = $colid;
             }
-            $this->expressions[$colid] = preg_match('/expr:([^\|]*)\|/',$col_setup,$val) ? new RawExpression("{$val[1]} as $colid") : $colid;
-            $this->casts[$colid]       = preg_match('/type:([^\|]*)\|/',$col_setup,$val) ? $val[1] : 'string';
+            $this->expressions[$colid] = preg_match('/\|expr:([^\|]+)\|/',$col_setup,$val) ? new RawExpression("{$val[1]} as $colid") : $colid;
+            $this->casts[$colid]       = preg_match('/\|type:([^\|]+)\|/',$col_setup,$val) ? $val[1] : 'string';
 
         }
+
+        if ($set_incrementing && count($this->primaryKey) !== 1 ) {
+            throw new Exception ('The model has either not set a primary key, or defines a multi-column primary-key.  Auto-increment not allowed in this context.');
+        }
+        $this->incrementing = $set_incrementing;
 
     }
 
